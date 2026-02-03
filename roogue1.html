@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Classroom Rogue: Terminal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+        
+        :root {
+            --phosphor-primary: #33ff33; /* Classic Terminal Green */
+            --phosphor-dim: #1a801a;
+            --phosphor-bright: #ccffcc;
+            --phosphor-danger: #ff3333; /* For critical hits/low hp */
+            --bg-color: #050a05;
+        }
+
+        body {
+            font-family: 'VT323', monospace;
+            background-color: var(--bg-color);
+            color: var(--phosphor-primary);
+            overflow: hidden;
+            touch-action: none;
+            text-shadow: 0 0 2px var(--phosphor-dim), 0 0 5px var(--phosphor-dim);
+        }
+
+        /* CRT Scanline Effect */
+        .scanlines {
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.2) 50%,
+                rgba(0,0,0,0.2)
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        /* Subtle Screen Flicker */
+        @keyframes flicker {
+            0% { opacity: 0.97; }
+            5% { opacity: 0.95; }
+            10% { opacity: 0.9; }
+            15% { opacity: 0.95; }
+            100% { opacity: 0.97; }
+        }
+
+        .crt-flicker {
+            animation: flicker 0.15s infinite;
+        }
+
+        #game-canvas {
+            image-rendering: pixelated;
+            border: 2px solid var(--phosphor-dim);
+            box-shadow: 0 0 20px rgba(51, 255, 51, 0.2);
+            background-color: #000;
+        }
+
+        /* Retro Button Style */
+        .btn-control {
+            background: #000;
+            border: 2px solid var(--phosphor-dim);
+            color: var(--phosphor-primary);
+            font-size: 2rem; /* Larger for VT323 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.1s;
+            user-select: none;
+            box-shadow: 0 0 10px rgba(51, 255, 51, 0.1);
+        }
+        .btn-control:active {
+            background: var(--phosphor-dim);
+            color: #000;
+        }
+
+        /* Scrollbar */
+        #log-container::-webkit-scrollbar { width: 8px; }
+        #log-container::-webkit-scrollbar-track { background: #000; }
+        #log-container::-webkit-scrollbar-thumb { background: var(--phosphor-dim); border: 1px solid #000; }
+
+        .text-phosphor { color: var(--phosphor-primary); }
+        .text-phosphor-bright { color: var(--phosphor-bright); text-shadow: 0 0 8px var(--phosphor-primary); }
+        .text-phosphor-dim { color: var(--phosphor-dim); }
+        .border-phosphor { border-color: var(--phosphor-dim); }
+        
+        .legend-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 0.5rem 1.5rem;
+            text-align: left;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col items-center justify-center relative crt-flicker">
+
+    <div class="scanlines absolute inset-0 w-full h-full"></div>
+
+    <!-- Game Container -->
+    <div class="z-20 flex flex-col w-full max-w-4xl h-full p-2 md:p-4 gap-2 md:gap-4">
+        
+        <!-- Header / Stats -->
+        <div class="relative bg-black p-3 border-b-2 border-phosphor">
+            
+            <div id="highscore-display" class="absolute top-2 right-3 text-xl text-phosphor-dim font-bold">
+                HI-SCORE: 0
+            </div>
+
+            <h1 class="text-3xl md:text-4xl text-phosphor-bright font-bold mb-1 tracking-widest">>> ROGUE.EXE</h1>
+            
+            <div class="flex flex-wrap gap-x-6 gap-y-1 text-xl text-phosphor items-center font-bold">
+                <span id="stat-hp" class="w-32">HP: 20/20</span>
+                <span id="stat-lvl">LVL: 1</span>
+                <span id="stat-atk">ATK: 3</span>
+                <span id="stat-def">DEF: 0</span>
+                <span id="stat-gold">GOLD: 0</span>
+                <span id="stat-depth" class="ml-auto mr-2">DEPTH: 1</span>
+            </div>
+        </div>
+
+        <!-- Main Game Area -->
+        <div class="flex-grow flex flex-col md:flex-row gap-4 overflow-hidden relative">
+            
+            <!-- Canvas Wrapper -->
+            <div class="relative flex-grow bg-black border-2 border-phosphor flex items-center justify-center overflow-hidden">
+                <canvas id="game-canvas"></canvas>
+                
+                <!-- Floating Text Container -->
+                <div id="floating-text-container" class="absolute inset-0 pointer-events-none overflow-hidden"></div>
+                
+                <!-- Game Over Screen -->
+                <div id="game-over-screen" class="absolute inset-0 bg-black flex flex-col items-center justify-center hidden z-30">
+                    <h2 class="text-6xl text-phosphor-danger font-bold mb-4 tracking-widest">FATAL ERROR</h2>
+                    <p id="death-message" class="text-phosphor-dim text-2xl mb-6 text-center px-4">SIGNAL LOST AT DEPTH 1</p>
+                    <button onclick="game.restart()" class="px-8 py-2 border-2 border-phosphor text-phosphor hover:bg-green-900 hover:text-white text-2xl font-bold cursor-pointer">
+                        [ REBOOT SYSTEM ]
+                    </button>
+                </div>
+
+                <!-- Victory Screen -->
+                <div id="victory-screen" class="absolute inset-0 bg-black flex flex-col items-center justify-center hidden z-30">
+                    <h2 class="text-6xl text-phosphor-bright font-bold mb-4 tracking-widest">MISSION COMPLETE</h2>
+                    <p class="text-phosphor text-2xl mb-6 text-center px-4">ARTIFACT RECOVERED SUCCESSFULLY.</p>
+                    <div class="text-3xl text-phosphor-dim mb-6" id="final-score">SCORE: 0</div>
+                    <button onclick="game.restart()" class="px-8 py-2 border-2 border-phosphor text-phosphor hover:bg-green-900 hover:text-white text-2xl font-bold cursor-pointer">
+                        [ NEW MISSION ]
+                    </button>
+                </div>
+
+                <!-- Help Screen (New!) -->
+                <div id="help-screen" class="absolute inset-0 bg-black z-50 flex flex-col items-center justify-center p-4 text-center hidden">
+                    <div class="border-2 border-phosphor bg-black p-6 max-w-md w-full shadow-[0_0_20px_rgba(51,255,51,0.2)]">
+                        <h2 class="text-4xl text-phosphor-bright font-bold mb-6 border-b border-phosphor pb-2">SYSTEM MANUAL</h2>
+                        
+                        <div class="grid grid-cols-2 gap-8 mb-6">
+                            <div>
+                                <h3 class="text-xl text-phosphor-dim mb-2 text-left underline">ENTITIES</h3>
+                                <div class="legend-grid text-xl">
+                                    <span class="text-phosphor-bright font-bold">@</span> <span>PLAYER</span>
+                                    <span class="text-phosphor font-bold">r,g</span> <span>MONSTERS</span>
+                                    <span class="text-phosphor-dim font-bold">#</span> <span>WALL</span>
+                                    <span class="text-phosphor-dim font-bold">.</span> <span>FLOOR</span>
+                                    <span class="text-phosphor-bright font-bold">&gt;</span> <span>STAIRS</span>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="text-xl text-phosphor-dim mb-2 text-left underline">ITEMS</h3>
+                                <div class="legend-grid text-xl">
+                                    <span class="text-phosphor font-bold">$</span> <span>GOLD</span>
+                                    <span class="text-phosphor font-bold">!</span> <span>POTION</span>
+                                    <span class="text-phosphor font-bold">/</span> <span>WEAPON</span>
+                                    <span class="text-phosphor font-bold">[</span> <span>ARMOR</span>
+                                    <span class="text-phosphor-bright font-bold">&</span> <span>AMULET</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-lg text-phosphor-dim mb-6 border-t border-phosphor pt-4">
+                            PRESS [SPACE] TO WAIT/REPAIR<br>
+                            PRESS [?] FOR HELP
+                        </div>
+
+                        <button onclick="game.toggleHelp()" class="px-8 py-2 border-2 border-phosphor text-phosphor hover:bg-green-900 hover:text-white text-2xl font-bold cursor-pointer w-full">
+                            [ RESUME ]
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Splash Screen -->
+                <div id="splash-screen" class="absolute inset-0 bg-black z-40 flex flex-col items-center justify-center p-4 text-center">
+                    <h1 class="text-6xl md:text-8xl text-phosphor-bright font-bold mb-2">ROGUE</h1>
+                    <p class="text-xl text-phosphor-dim mb-8">v1.1 - TERMINAL EDITION</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl w-full mb-8 text-left border-2 border-phosphor p-6">
+                        <div>
+                            <h3 class="text-phosphor-bright font-bold mb-2 text-2xl border-b border-phosphor inline-block">OBJECTIVE</h3>
+                            <p class="text-phosphor text-xl mb-2">Retrieve the <span class="text-phosphor-bright">&</span> Amulet from <span class="text-phosphor-bright" id="splash-depth">Depth 8</span>.</p>
+                            <p class="text-phosphor-dim text-lg">System stability critical. Maintain HP levels.</p>
+                        </div>
+
+                        <div>
+                            <h3 class="text-phosphor-bright font-bold mb-2 text-2xl border-b border-phosphor inline-block">INPUTS</h3>
+                            <ul class="text-phosphor text-xl space-y-1">
+                                <li>[ARROWS] : Navigate / Engage</li>
+                                <li>[SPACE]  : Standby / Repair</li>
+                                <li>[?]      : Identify Threat</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <button onclick="game.startGame()" class="px-12 py-4 border-2 border-phosphor text-phosphor-bright hover:bg-green-900 text-3xl font-bold transition-all hover:scale-105 shadow-[0_0_15px_rgba(51,255,51,0.5)]">
+                        INITIALIZE >
+                    </button>
+                </div>
+            </div>
+
+            <!-- Log -->
+            <div id="log-container" class="bg-black p-2 md:w-72 h-32 md:h-auto border-2 border-phosphor overflow-y-auto text-lg leading-tight">
+                <div class="text-phosphor-dim">Initializing dungeon generation protocol...</div>
+            </div>
+        </div>
+
+        <!-- Mobile Controls -->
+        <div class="md:hidden h-40 grid grid-cols-3 grid-rows-2 gap-2 pb-2">
+            <div class="col-start-2 row-start-1 btn-control" id="btn-up">▲</div>
+            <div class="col-start-1 row-start-2 btn-control" id="btn-left">◀</div>
+            <div class="col-start-2 row-start-2 btn-control" id="btn-down">▼</div>
+            <div class="col-start-3 row-start-2 btn-control" id="btn-right">▶</div>
+            <div class="col-start-1 row-start-1 btn-control text-xl" onclick="game.wait()">WAIT</div>
+            <div class="col-start-3 row-start-1 btn-control text-xl" onclick="game.toggleHelp()">?</div>
+        </div>
+
+    </div>
+
+<script>
+/**
+ * CLASSROOM ROGUE: TERMINAL EDITION
+ * Retro ASCII aesthetic.
+ */
+
+// --- Settings ---
+const GAME_SETTINGS = {
+    startHp: 20,
+    startAtk: 3,
+    startDef: 0,
+    xpMultiplier: 1.2,
+    enemyDamageMultiplier: 0.8, 
+    healPotionAmount: 12,
+    amuletDepth: 8,
+    turnsToHeal: 5
+};
+
+const TILE_SIZE = 24;
+const MAP_WIDTH = 40;
+const MAP_HEIGHT = 25;
+const FONT_SIZE = 28; // Slightly larger for VT323 font legibility
+
+// Color Palette (Phosphor Green)
+const COLORS = {
+    WALL: '#1a801a',      // Dim Green
+    FLOOR: '#0a200a',     // Very Dark Green
+    FLOOR_VISIBLE: '#113311', 
+    TEXT: '#33ff33',      // Bright Green
+    HIGHLIGHT: '#ccffcc', // White-Green
+    DANGER: '#ff3333'     // Red (Rare usage)
+};
+
+// ASCII THEME
+const ENTITIES = {
+    PLAYER: { char: '@', color: '#ccffcc' }, // The Classic Hero
+    WALL: { char: '#', color: '#1a801a' },
+    FLOOR: { char: '.', color: '#1a401a' },
+    STAIRS: { char: '>', name: 'Stairs', color: '#33ff33' },
+    AMULET: { char: '&', name: 'Amulet', color: '#ccffcc' }, 
+    GOLD: { char: '$', name: 'Gold', color: '#33ff33' },
+    POTION: { char: '!', name: 'Potion', color: '#33ff33' },
+    SWORD: { char: '/', name: 'Sword', color: '#33ff33' },
+    SHIELD: { char: '[', name: 'Shield', color: '#33ff33' }
+};
+
+// Classic Monsters (Letters)
+const MONSTERS = [
+    { name: 'Rat', char: 'r', hp: 5, atk: 2, def: 0, exp: 5, color: '#33ff33', speed: 1.0 },
+    { name: 'Bat', char: 'b', hp: 6, atk: 3, def: 0, exp: 7, color: '#33ff33', speed: 1.2 },
+    { name: 'Kobold', char: 'k', hp: 8, atk: 2, def: 1, exp: 10, color: '#33ff33', speed: 1.0 },
+    { name: 'Goblin', char: 'g', hp: 12, atk: 4, def: 1, exp: 15, color: '#33ff33', speed: 0.8 },
+    { name: 'Orc', char: 'o', hp: 18, atk: 6, def: 2, exp: 25, color: '#33ff33', speed: 0.8 },
+    { name: 'Slime', char: 's', hp: 20, atk: 3, def: 3, exp: 20, color: '#33ff33', speed: 0.5 },
+    { name: 'Dragon', char: 'D', hp: 50, atk: 10, def: 4, exp: 100, color: '#ccffcc', speed: 1.0 } // Bright color for boss
+];
+
+function randomInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function getDistance(x1, y1, x2, y2) {
+    return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+}
+
+class Entity {
+    constructor(x, y, type, props = {}) {
+        this.x = x;
+        this.y = y;
+        this.char = type.char;
+        this.color = type.color;
+        this.name = props.name || type.name;
+        this.hp = props.hp || 0;
+        this.maxHp = this.hp;
+        this.atk = props.atk || 0;
+        this.def = props.def || 0;
+        this.exp = props.exp || 0;
+        this.isEnemy = !!props.hp;
+        this.isItem = !this.isEnemy;
+        this.speed = props.speed || 1.0;
+        this.moveAccumulator = 0;
+    }
+}
+
+class Game {
+    constructor() {
+        this.canvas = document.getElementById('game-canvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.logContainer = document.getElementById('log-container');
+        
+        document.getElementById('splash-depth').innerText = `DEPTH ${GAME_SETTINGS.amuletDepth}`;
+
+        // Initialize High Score with support for levels
+        const savedData = JSON.parse(localStorage.getItem('rogueHighScoreRetro')) || { gold: 0, level: 1 };
+        // Handle legacy storage (if it was just a number before)
+        if (typeof savedData === 'number') {
+            this.highScoreGold = savedData;
+            this.highScoreLevel = 1; 
+        } else {
+            this.highScoreGold = savedData.gold || 0;
+            this.highScoreLevel = savedData.level || 1;
+        }
+        
+        this.updateHighScoreDisplay();
+
+        this.gameStarted = false;
+        this.isHelpOpen = false;
+        this.map = [];
+        this.visible = [];
+        this.visited = [];
+        this.entities = [];
+        this.player = null;
+        this.depth = 1;
+        this.turn = 0;
+        this.isGameOver = false;
+        this.waitCounter = 0;
+
+        this.playerStats = {
+            hp: GAME_SETTINGS.startHp,
+            maxHp: GAME_SETTINGS.startHp,
+            atk: GAME_SETTINGS.startAtk,
+            def: GAME_SETTINGS.startDef,
+            level: 1,
+            exp: 0,
+            expToNext: 50,
+            gold: 0
+        };
+
+        this.initLevel();
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this.setupInput();
+    }
+
+    updateHighScoreDisplay() {
+        document.getElementById('highscore-display').innerText = `HI-SCORE: ${this.highScoreGold} (LVL ${this.highScoreLevel})`;
+    }
+
+    startGame() {
+        this.gameStarted = true;
+        document.getElementById('splash-screen').classList.add('hidden');
+        this.log("SYSTEM INITIALIZED. ENTERING DUNGEON...", "text-phosphor-bright");
+    }
+
+    toggleHelp() {
+        const helpScreen = document.getElementById('help-screen');
+        if (this.isHelpOpen) {
+            helpScreen.classList.add('hidden');
+            this.isHelpOpen = false;
+        } else {
+            helpScreen.classList.remove('hidden');
+            this.isHelpOpen = true;
+        }
+    }
+
+    checkHighScore() {
+        if (this.playerStats.gold > this.highScoreGold) {
+            this.highScoreGold = this.playerStats.gold;
+            this.highScoreLevel = this.playerStats.level;
+            
+            localStorage.setItem('rogueHighScoreRetro', JSON.stringify({
+                gold: this.highScoreGold,
+                level: this.highScoreLevel
+            }));
+            
+            this.updateHighScoreDisplay();
+            return true;
+        }
+        return false;
+    }
+
+    resize() {
+        this.canvas.width = MAP_WIDTH * TILE_SIZE;
+        this.canvas.height = MAP_HEIGHT * TILE_SIZE;
+        this.canvas.style.width = '100%';
+        this.canvas.style.height = '100%';
+        this.canvas.style.objectFit = 'contain';
+        this.draw();
+    }
+
+    setupInput() {
+        window.addEventListener('keydown', (e) => {
+            // Help Toggle
+            if (e.key === '?' || e.key === '/') {
+                this.toggleHelp();
+                return;
+            }
+
+            // Close help with Escape or Space
+            if (this.isHelpOpen) {
+                if(e.key === 'Escape' || e.key === ' ') {
+                     this.toggleHelp();
+                }
+                return;
+            }
+
+            if (!this.gameStarted || this.isGameOver) return;
+            
+            let dx = 0; let dy = 0;
+            switch(e.key) {
+                case 'ArrowUp': case 'w': dy = -1; break;
+                case 'ArrowDown': case 's': dy = 1; break;
+                case 'ArrowLeft': case 'a': dx = -1; break;
+                case 'ArrowRight': case 'd': dx = 1; break;
+                case ' ': case '.': this.wait(); return;
+            }
+
+            if (dx !== 0 || dy !== 0) {
+                this.movePlayer(dx, dy);
+                e.preventDefault();
+            }
+        });
+
+        const bindTouch = (id, dx, dy) => {
+            const btn = document.getElementById(id);
+            if(btn) {
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    if(this.gameStarted && !this.isGameOver && !this.isHelpOpen) this.movePlayer(dx, dy);
+                }, { passive: false });
+                btn.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    if(this.gameStarted && !this.isGameOver && !this.isHelpOpen) this.movePlayer(dx, dy);
+                });
+            }
+        };
+
+        bindTouch('btn-up', 0, -1);
+        bindTouch('btn-down', 0, 1);
+        bindTouch('btn-left', -1, 0);
+        bindTouch('btn-right', 1, 0);
+    }
+
+    log(msg, color = 'text-phosphor-dim') {
+        const div = document.createElement('div');
+        div.className = `mb-1 ${color}`;
+        div.innerHTML = `> ${msg}`;
+        this.logContainer.appendChild(div);
+        this.logContainer.scrollTop = this.logContainer.scrollHeight;
+    }
+
+    initLevel() {
+        this.entities = [];
+        this.map = [];
+        this.visible = [];
+        this.visited = [];
+        this.waitCounter = 0;
+
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            this.map[y] = [];
+            this.visible[y] = [];
+            this.visited[y] = [];
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                this.map[y][x] = '#';
+                this.visible[y][x] = false;
+                this.visited[y][x] = false;
+            }
+        }
+
+        const rooms = [];
+        const maxRooms = 10;
+
+        for (let i = 0; i < maxRooms; i++) {
+            const w = randomInt(4, 8);
+            const h = randomInt(4, 8);
+            const x = randomInt(1, MAP_WIDTH - w - 1);
+            const y = randomInt(1, MAP_HEIGHT - h - 1);
+
+            const newRoom = { x, y, w, h };
+            let failed = false;
+
+            for (let other of rooms) {
+                if (x <= other.x + other.w && x + w >= other.x &&
+                    y <= other.y + other.h && y + h >= other.y) {
+                    failed = true;
+                    break;
+                }
+            }
+
+            if (!failed) {
+                this.createRoom(newRoom);
+                if (rooms.length > 0) {
+                    const prev = rooms[rooms.length - 1];
+                    this.connectRooms(prev, newRoom);
+                }
+                rooms.push(newRoom);
+            }
+        }
+
+        const startRoom = rooms[0];
+        const center = this.getRoomCenter(startRoom);
+        
+        if (!this.player) {
+            this.player = new Entity(center.x, center.y, ENTITIES.PLAYER, { name: 'Player' });
+        } else {
+            this.player.x = center.x;
+            this.player.y = center.y;
+        }
+
+        const endRoom = rooms[rooms.length - 1];
+        const endCenter = this.getRoomCenter(endRoom);
+        
+        if (this.depth === GAME_SETTINGS.amuletDepth) {
+            this.entities.push(new Entity(endCenter.x, endCenter.y, ENTITIES.AMULET));
+        } else {
+            this.entities.push(new Entity(endCenter.x, endCenter.y, ENTITIES.STAIRS));
+        }
+
+        rooms.forEach((room, index) => {
+            if (index === 0) return; 
+            this.spawnContents(room);
+        });
+
+        this.updateFoW();
+        this.updateUI();
+        this.log(`DEPTH: ${this.depth} // SCAN COMPLETE`, 'text-phosphor');
+        this.draw();
+    }
+
+    createRoom(room) {
+        for (let y = room.y; y < room.y + room.h; y++) {
+            for (let x = room.x; x < room.x + room.w; x++) {
+                this.map[y][x] = '.';
+            }
+        }
+    }
+
+    getRoomCenter(room) {
+        return {
+            x: Math.floor(room.x + room.w / 2),
+            y: Math.floor(room.y + room.h / 2)
+        };
+    }
+
+    connectRooms(r1, r2) {
+        const c1 = this.getRoomCenter(r1);
+        const c2 = this.getRoomCenter(r2);
+        if (Math.random() < 0.5) {
+            this.hCorridor(c1.x, c2.x, c1.y);
+            this.vCorridor(c1.y, c2.y, c2.x);
+        } else {
+            this.vCorridor(c1.y, c2.y, c1.x);
+            this.hCorridor(c1.x, c2.x, c2.y);
+        }
+    }
+
+    hCorridor(x1, x2, y) {
+        for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) {
+            this.map[y][x] = '.';
+        }
+    }
+
+    vCorridor(y1, y2, x) {
+        for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) {
+            this.map[y][x] = '.';
+        }
+    }
+
+    spawnContents(room) {
+        if (Math.random() < 0.7) {
+            const x = randomInt(room.x, room.x + room.w - 1);
+            const y = randomInt(room.y, room.y + room.h - 1);
+            if (x !== this.player.x || y !== this.player.y) {
+                const maxIndex = MONSTERS.length - 1;
+                const scale = (this.depth - 1) / (GAME_SETTINGS.amuletDepth - 1);
+                const maxAvailable = Math.ceil(scale * maxIndex) + 1;
+                const difficulty = Math.min(maxIndex, Math.floor(Math.random() * maxAvailable));
+                const monsterType = MONSTERS[difficulty];
+                
+                this.entities.push(new Entity(x, y, { char: monsterType.char, color: monsterType.color }, {...monsterType}));
+            }
+        }
+
+        if (Math.random() < 0.5) {
+            const x = randomInt(room.x, room.x + room.w - 1);
+            const y = randomInt(room.y, room.y + room.h - 1);
+            const roll = Math.random();
+            let itemType;
+            if (roll < 0.5) itemType = ENTITIES.GOLD;
+            else if (roll < 0.7) itemType = ENTITIES.POTION;
+            else if (roll < 0.85) itemType = ENTITIES.SWORD;
+            else itemType = ENTITIES.SHIELD;
+
+            if (!this.getEntityAt(x, y)) {
+                this.entities.push(new Entity(x, y, itemType));
+            }
+        }
+    }
+
+    getEntityAt(x, y) {
+        return this.entities.find(e => e.x === x && e.y === y);
+    }
+
+    movePlayer(dx, dy) {
+        this.waitCounter = 0;
+        const newX = this.player.x + dx;
+        const newY = this.player.y + dy;
+
+        if (this.map[newY][newX] === '#') return;
+
+        const target = this.getEntityAt(newX, newY);
+        if (target) {
+            if (target.isEnemy) {
+                this.attack(this.player, target);
+                this.processTurn(false);
+                return;
+            } else if (target.isItem) {
+                if (target.name === 'Stairs') {
+                    this.nextLevel();
+                    return;
+                } else if (target.name === 'Amulet') {
+                    this.victory();
+                    return;
+                } else {
+                    this.pickup(target);
+                    this.entities = this.entities.filter(e => e !== target);
+                }
+            }
+        }
+
+        this.player.x = newX;
+        this.player.y = newY;
+        this.processTurn(false);
+    }
+
+    pickup(item) {
+        if (item.name === 'Gold') {
+            const amount = randomInt(5, 15);
+            this.playerStats.gold += amount;
+            this.log(`ACQUIRED ${amount} GOLD`, 'text-phosphor-bright');
+            this.showFloatText(this.player.x, this.player.y, `+$${amount}`, '#ccffcc');
+        } else if (item.name === 'Potion') {
+            const heal = GAME_SETTINGS.healPotionAmount;
+            this.playerStats.hp = Math.min(this.playerStats.maxHp, this.playerStats.hp + heal);
+            this.log(`POTION CONSUMED. HP RECOVERED.`, 'text-phosphor');
+            this.showFloatText(this.player.x, this.player.y, `+${heal}HP`, '#33ff33');
+        } else if (item.name === 'Sword') {
+            this.playerStats.atk += 1;
+            this.log(`WEAPON UPGRADED.`, 'text-phosphor');
+            this.showFloatText(this.player.x, this.player.y, `ATK+1`, '#ccffcc');
+        } else if (item.name === 'Shield') {
+            this.playerStats.def += 1;
+            this.log(`ARMOR UPGRADED.`, 'text-phosphor');
+            this.showFloatText(this.player.x, this.player.y, `DEF+1`, '#ccffcc');
+        }
+        this.updateUI();
+    }
+
+    attack(attacker, defender) {
+        let dmg;
+        if (attacker === this.player) {
+            dmg = Math.max(1, this.playerStats.atk - (defender.def || 0));
+            defender.hp -= dmg;
+            this.log(`You hit the ${defender.name}.`);
+            this.showFloatText(defender.x, defender.y, `-${dmg}`, '#fff');
+            
+            if (defender.hp <= 0) {
+                this.log(`${defender.name} terminated.`, 'text-phosphor-bright');
+                const xpGain = Math.floor(defender.exp * GAME_SETTINGS.xpMultiplier);
+                this.gainExp(xpGain);
+                this.entities = this.entities.filter(e => e !== defender);
+            }
+        } else {
+            const defense = Math.floor(this.playerStats.def / 2);
+            dmg = Math.max(0, attacker.atk - defense);
+            dmg = Math.floor(dmg * GAME_SETTINGS.enemyDamageMultiplier);
+            this.playerStats.hp -= dmg;
+            this.log(`${attacker.name} hits you!`, 'text-phosphor-danger');
+            this.showFloatText(this.player.x, this.player.y, `-${dmg}`, '#ff3333');
+            
+            if (this.playerStats.hp <= 0) {
+                this.gameOver();
+            }
+        }
+        this.updateUI();
+    }
+
+    gainExp(amount) {
+        this.playerStats.exp += amount;
+        if (this.playerStats.exp >= this.playerStats.expToNext) {
+            this.playerStats.level++;
+            this.playerStats.exp -= this.playerStats.expToNext;
+            this.playerStats.expToNext = Math.floor(this.playerStats.expToNext * 1.5);
+            this.playerStats.maxHp += 5;
+            this.playerStats.hp = this.playerStats.maxHp;
+            this.playerStats.atk += 1;
+            this.log(`LEVEL UP DETECTED.`, 'text-phosphor-bright font-bold');
+            this.showFloatText(this.player.x, this.player.y, `LEVEL UP`, '#ffffff');
+        }
+    }
+
+    wait() {
+        if(!this.isGameOver) {
+            this.waitCounter++;
+            if (this.waitCounter >= GAME_SETTINGS.turnsToHeal) {
+                if (this.playerStats.hp < this.playerStats.maxHp) {
+                    this.playerStats.hp++;
+                    this.log("Repairs complete. HP +1.", 'text-phosphor');
+                    this.showFloatText(this.player.x, this.player.y, `+1HP`, '#33ff33');
+                }
+                this.waitCounter = 0;
+            } else {
+                this.log(`Standby...`);
+            }
+            this.processTurn(true);
+        }
+    }
+
+    processTurn(isWaiting) {
+        this.updateFoW();
+        const baseAggro = 8;
+        const aggroRange = isWaiting ? 20 : baseAggro;
+
+        if (isWaiting) this.showFloatText(this.player.x, this.player.y, "...", "#33ff33");
+        
+        this.entities.forEach(entity => {
+            if (entity.isEnemy) {
+                entity.moveAccumulator += entity.speed;
+                if (entity.moveAccumulator >= 1.0) {
+                    entity.moveAccumulator -= 1.0;
+                    this.moveMonster(entity, aggroRange);
+                }
+            }
+        });
+        this.draw();
+        this.updateUI();
+    }
+
+    moveMonster(entity, range) {
+        const dist = getDistance(entity.x, entity.y, this.player.x, this.player.y);
+        if (dist < range) {
+            let dx = 0, dy = 0;
+            if (Math.abs(this.player.x - entity.x) > Math.abs(this.player.y - entity.y)) {
+                dx = this.player.x > entity.x ? 1 : -1;
+            } else {
+                dy = this.player.y > entity.y ? 1 : -1;
+            }
+
+            const nextX = entity.x + dx;
+            const nextY = entity.y + dy;
+
+            if (nextX === this.player.x && nextY === this.player.y) {
+                this.attack(entity, this.player);
+            } else if (this.map[nextY][nextX] !== '#' && !this.getEntityAt(nextX, nextY)) {
+                entity.x = nextX;
+                entity.y = nextY;
+            }
+        }
+    }
+
+    updateFoW() {
+        const viewRadius = 7;
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                this.visible[y][x] = false;
+                if (getDistance(this.player.x, this.player.y, x, y) < viewRadius) {
+                    this.visible[y][x] = true;
+                    this.visited[y][x] = true;
+                }
+            }
+        }
+    }
+
+    nextLevel() {
+        this.depth++;
+        this.log(`DESCENDING TO DEPTH ${this.depth}...`, 'text-phosphor-bright');
+        this.initLevel();
+    }
+
+    gameOver() {
+        this.isGameOver = true;
+        this.checkHighScore();
+        this.draw(); 
+        document.getElementById('game-over-screen').classList.remove('hidden');
+        document.getElementById('death-message').innerText = `CRITICAL FAILURE AT DEPTH ${this.depth}.`;
+    }
+
+    victory() {
+        this.isGameOver = true;
+        const isNewRecord = this.checkHighScore();
+        document.getElementById('victory-screen').classList.remove('hidden');
+        document.getElementById('final-score').innerText = `SCORE: ${this.playerStats.gold} | LEVEL: ${this.playerStats.level}${isNewRecord ? ' (NEW RECORD)' : ''}`;
+    }
+
+    restart() {
+        this.playerStats = {
+            hp: GAME_SETTINGS.startHp, 
+            maxHp: GAME_SETTINGS.startHp, 
+            atk: GAME_SETTINGS.startAtk, 
+            def: GAME_SETTINGS.startDef, 
+            level: 1, 
+            exp: 0, 
+            expToNext: 50, 
+            gold: 0
+        };
+        this.depth = 1;
+        this.isGameOver = false;
+        this.player = null; 
+        document.getElementById('game-over-screen').classList.add('hidden');
+        document.getElementById('victory-screen').classList.add('hidden');
+        this.logContainer.innerHTML = '';
+        this.log('REBOOTING...');
+        this.initLevel();
+    }
+
+    showHelp() {
+        this.log(`OBJECTIVE: RETRIEVE AMULET (&) AT DEPTH ${GAME_SETTINGS.amuletDepth}.`, 'text-phosphor-bright');
+        this.log('ARROWS TO MOVE. SPACE TO REPAIR.', 'text-phosphor-dim');
+    }
+
+    draw() {
+        // Clear
+        this.ctx.fillStyle = COLORS.FLOOR; 
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        const offsetX = 0;
+        const offsetY = 0;
+
+        this.ctx.font = `${FONT_SIZE}px 'VT323'`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                const px = x * TILE_SIZE + TILE_SIZE / 2 + offsetX;
+                const py = y * TILE_SIZE + TILE_SIZE / 2 + offsetY;
+
+                if (this.visible[y][x]) {
+                    if (this.map[y][x] === '#') {
+                        this.ctx.fillStyle = COLORS.WALL;
+                        this.ctx.fillText('#', px, py);
+                    } else {
+                        this.ctx.fillStyle = COLORS.TEXT;
+                        this.ctx.globalAlpha = 0.2;
+                        this.ctx.fillText('.', px, py);
+                        this.ctx.globalAlpha = 1.0;
+                    }
+                } else if (this.visited[y][x]) {
+                    // Memory (Fog of War) - Dim
+                    this.ctx.fillStyle = '#0f300f'; // Dark green
+                    this.ctx.fillText(this.map[y][x], px, py);
+                }
+            }
+        }
+
+        // Draw Entities
+        this.entities.forEach(e => {
+            if (this.visible[e.y][e.x]) {
+                const px = e.x * TILE_SIZE + TILE_SIZE / 2 + offsetX;
+                const py = e.y * TILE_SIZE + TILE_SIZE / 2 + offsetY;
+                this.ctx.fillStyle = e.color || '#33ff33';
+                this.ctx.fillText(e.char, px, py);
+            }
+        });
+
+        // Draw Player
+        if (this.player) {
+            const pPx = this.player.x * TILE_SIZE + TILE_SIZE / 2 + offsetX;
+            const pPy = this.player.y * TILE_SIZE + TILE_SIZE / 2 + offsetY;
+            this.ctx.fillStyle = ENTITIES.PLAYER.color;
+            this.ctx.fillText(ENTITIES.PLAYER.char, pPx, pPy);
+        }
+    }
+
+    updateUI() {
+        document.getElementById('stat-hp').innerText = `HP: ${this.playerStats.hp}/${this.playerStats.maxHp}`;
+        document.getElementById('stat-lvl').innerText = `LVL: ${this.playerStats.level}`;
+        document.getElementById('stat-gold').innerText = `GOLD: ${this.playerStats.gold}`;
+        document.getElementById('stat-depth').innerText = `DEPTH: ${this.depth}`;
+        document.getElementById('stat-atk').innerText = `ATK: ${this.playerStats.atk}`;
+        document.getElementById('stat-def').innerText = `DEF: ${this.playerStats.def}`;
+        
+        const hpElem = document.getElementById('stat-hp');
+        if (this.playerStats.hp < this.playerStats.maxHp * 0.3) {
+            hpElem.className = 'w-32 text-red-500 font-bold animate-pulse';
+            hpElem.style.textShadow = '0 0 5px red';
+        } else {
+            hpElem.className = 'w-32 text-phosphor';
+            hpElem.style.textShadow = '';
+        }
+    }
+
+    showFloatText(x, y, text, color) {
+        const container = document.getElementById('floating-text-container');
+        const el = document.createElement('div');
+        
+        const left = (x / MAP_WIDTH) * 100;
+        const top = (y / MAP_HEIGHT) * 100;
+
+        el.style.left = `${left}%`;
+        el.style.top = `${top}%`;
+        el.style.color = color;
+        el.className = 'absolute font-bold text-lg pointer-events-none transition-all duration-1000 transform -translate-y-4 opacity-0 font-vt323';
+        el.style.textShadow = '0 0 2px black';
+        el.style.fontFamily = "'VT323', monospace";
+        el.innerText = text;
+
+        container.appendChild(el);
+
+        requestAnimationFrame(() => {
+            el.classList.remove('opacity-0');
+            el.style.transform = `translateY(-30px)`;
+            el.style.opacity = '0';
+        });
+
+        setTimeout(() => {
+            el.remove();
+        }, 1000);
+    }
+}
+
+// Ensure game is attached to window for inline HTML events
+window.game = null;
+window.onload = () => {
+    window.game = new Game();
+};
+</script>
+</body>
+</html>
