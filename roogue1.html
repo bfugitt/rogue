@@ -93,6 +93,26 @@
             gap: 0.5rem 1.5rem;
             text-align: left;
         }
+
+        /* Shop Styles */
+        .shop-item {
+            border: 1px solid var(--phosphor-dim);
+            padding: 10px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: space-between;
+        }
+        .shop-item:hover {
+            background: var(--phosphor-dim);
+            color: #000;
+        }
+        .shop-item.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            border-style: dashed;
+        }
     </style>
 </head>
 <body class="h-screen w-screen flex flex-col items-center justify-center relative crt-flicker">
@@ -150,7 +170,7 @@
                     </button>
                 </div>
 
-                <!-- Help Screen (New!) -->
+                <!-- Help Screen -->
                 <div id="help-screen" class="absolute inset-0 bg-black z-50 flex flex-col items-center justify-center p-4 text-center hidden">
                     <div class="border-2 border-phosphor bg-black p-6 max-w-md w-full shadow-[0_0_20px_rgba(51,255,51,0.2)]">
                         <h2 class="text-4xl text-phosphor-bright font-bold mb-6 border-b border-phosphor pb-2">SYSTEM MANUAL</h2>
@@ -173,7 +193,7 @@
                                     <span class="text-phosphor font-bold">!</span> <span>POTION</span>
                                     <span class="text-phosphor font-bold">/</span> <span>WEAPON</span>
                                     <span class="text-phosphor font-bold">[</span> <span>ARMOR</span>
-                                    <span class="text-phosphor-bright font-bold">&</span> <span>AMULET</span>
+                                    <span class="text-cyan-400 font-bold">M</span> <span>SHOP</span>
                                 </div>
                             </div>
                         </div>
@@ -189,10 +209,37 @@
                     </div>
                 </div>
 
+                <!-- Shop Screen (New!) -->
+                <div id="shop-screen" class="absolute inset-0 bg-black z-50 flex flex-col items-center justify-center p-4 text-center hidden">
+                    <div class="border-2 border-cyan-500 bg-black p-6 max-w-md w-full shadow-[0_0_20px_rgba(0,255,255,0.2)]">
+                        <h2 class="text-4xl text-cyan-400 font-bold mb-2 border-b border-cyan-900 pb-2">MERCHANT TERMINAL</h2>
+                        <p class="text-xl text-phosphor mb-4">CREDITS AVAILABLE: <span id="shop-gold" class="text-phosphor-bright">0</span></p>
+                        
+                        <div class="flex flex-col gap-2 mb-6 text-xl text-left">
+                            <div class="shop-item" onclick="game.buyItem('potion')">
+                                <span>[1] HEALTH POTION (+12 HP)</span>
+                                <span class="text-phosphor-dim">20g</span>
+                            </div>
+                            <div class="shop-item" onclick="game.buyItem('weapon')">
+                                <span>[2] UPGRADE WEAPON (+1 ATK)</span>
+                                <span class="text-phosphor-dim">50g</span>
+                            </div>
+                            <div class="shop-item" onclick="game.buyItem('armor')">
+                                <span>[3] UPGRADE ARMOR (+1 DEF)</span>
+                                <span class="text-phosphor-dim">50g</span>
+                            </div>
+                        </div>
+
+                        <button onclick="game.closeShop()" class="px-8 py-2 border-2 border-cyan-500 text-cyan-400 hover:bg-cyan-900 hover:text-white text-2xl font-bold cursor-pointer w-full">
+                            [ DISCONNECT ]
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Splash Screen -->
                 <div id="splash-screen" class="absolute inset-0 bg-black z-40 flex flex-col items-center justify-center p-4 text-center">
                     <h1 class="text-6xl md:text-8xl text-phosphor-bright font-bold mb-2">ROGUE</h1>
-                    <p class="text-xl text-phosphor-dim mb-8">v1.1 - TERMINAL EDITION</p>
+                    <p class="text-xl text-phosphor-dim mb-8">v1.2 - TERMINAL EDITION</p>
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl w-full mb-8 text-left border-2 border-phosphor p-6">
                         <div>
@@ -250,7 +297,8 @@ const GAME_SETTINGS = {
     enemyDamageMultiplier: 0.8, 
     healPotionAmount: 12,
     amuletDepth: 8,
-    turnsToHeal: 5
+    turnsToHeal: 5,
+    sightAggro: true // NEW: Monsters hunt if visible
 };
 
 const TILE_SIZE = 24;
@@ -278,7 +326,8 @@ const ENTITIES = {
     GOLD: { char: '$', name: 'Gold', color: '#33ff33' },
     POTION: { char: '!', name: 'Potion', color: '#33ff33' },
     SWORD: { char: '/', name: 'Sword', color: '#33ff33' },
-    SHIELD: { char: '[', name: 'Shield', color: '#33ff33' }
+    SHIELD: { char: '[', name: 'Shield', color: '#33ff33' },
+    SHOP: { char: 'M', name: 'Merchant', color: '#22d3ee' } // Cyan 'M' for merchant
 };
 
 // Classic Monsters (Letters)
@@ -329,7 +378,6 @@ class Game {
 
         // Initialize High Score with support for levels
         const savedData = JSON.parse(localStorage.getItem('rogueHighScoreRetro')) || { gold: 0, level: 1 };
-        // Handle legacy storage (if it was just a number before)
         if (typeof savedData === 'number') {
             this.highScoreGold = savedData;
             this.highScoreLevel = 1; 
@@ -342,6 +390,7 @@ class Game {
 
         this.gameStarted = false;
         this.isHelpOpen = false;
+        this.isShopOpen = false;
         this.map = [];
         this.visible = [];
         this.visited = [];
@@ -380,6 +429,7 @@ class Game {
     }
 
     toggleHelp() {
+        if (this.isShopOpen) return;
         const helpScreen = document.getElementById('help-screen');
         if (this.isHelpOpen) {
             helpScreen.classList.add('hidden');
@@ -387,6 +437,56 @@ class Game {
         } else {
             helpScreen.classList.remove('hidden');
             this.isHelpOpen = true;
+        }
+    }
+
+    openShop() {
+        this.isShopOpen = true;
+        document.getElementById('shop-screen').classList.remove('hidden');
+        document.getElementById('shop-gold').innerText = this.playerStats.gold;
+        this.log("CONNECTED TO MERCHANT TERMINAL.", "text-cyan-400");
+    }
+
+    closeShop() {
+        this.isShopOpen = false;
+        document.getElementById('shop-screen').classList.add('hidden');
+        this.log("TERMINAL DISCONNECTED.", "text-phosphor-dim");
+    }
+
+    buyItem(type) {
+        let cost = 0;
+        let success = false;
+
+        if (type === 'potion') {
+            cost = 20;
+            if (this.playerStats.gold >= cost) {
+                const heal = GAME_SETTINGS.healPotionAmount;
+                this.playerStats.hp = Math.min(this.playerStats.maxHp, this.playerStats.hp + heal);
+                this.log(`PURCHASED POTION. HP +${heal}`, "text-phosphor-bright");
+                success = true;
+            }
+        } else if (type === 'weapon') {
+            cost = 50;
+            if (this.playerStats.gold >= cost) {
+                this.playerStats.atk++;
+                this.log(`WEAPON UPGRADED. ATK UP.`, "text-phosphor-bright");
+                success = true;
+            }
+        } else if (type === 'armor') {
+            cost = 50;
+            if (this.playerStats.gold >= cost) {
+                this.playerStats.def++;
+                this.log(`ARMOR UPGRADED. DEF UP.`, "text-phosphor-bright");
+                success = true;
+            }
+        }
+
+        if (success) {
+            this.playerStats.gold -= cost;
+            document.getElementById('shop-gold').innerText = this.playerStats.gold;
+            this.updateUI();
+        } else {
+            this.log("INSUFFICIENT CREDITS.", "text-phosphor-danger");
         }
     }
 
@@ -423,14 +523,14 @@ class Game {
                 return;
             }
 
-            // Close help with Escape or Space
-            if (this.isHelpOpen) {
-                if(e.key === 'Escape' || e.key === ' ') {
-                     this.toggleHelp();
-                }
+            // Close overlays with Escape
+            if(e.key === 'Escape') {
+                if(this.isHelpOpen) this.toggleHelp();
+                if(this.isShopOpen) this.closeShop();
                 return;
             }
 
+            if (this.isHelpOpen || this.isShopOpen) return;
             if (!this.gameStarted || this.isGameOver) return;
             
             let dx = 0; let dy = 0;
@@ -453,11 +553,11 @@ class Game {
             if(btn) {
                 btn.addEventListener('touchstart', (e) => {
                     e.preventDefault();
-                    if(this.gameStarted && !this.isGameOver && !this.isHelpOpen) this.movePlayer(dx, dy);
+                    if(this.gameStarted && !this.isGameOver && !this.isHelpOpen && !this.isShopOpen) this.movePlayer(dx, dy);
                 }, { passive: false });
                 btn.addEventListener('mousedown', (e) => {
                     e.preventDefault();
-                    if(this.gameStarted && !this.isGameOver && !this.isHelpOpen) this.movePlayer(dx, dy);
+                    if(this.gameStarted && !this.isGameOver && !this.isHelpOpen && !this.isShopOpen) this.movePlayer(dx, dy);
                 });
             }
         };
@@ -594,6 +694,7 @@ class Game {
     }
 
     spawnContents(room) {
+        // Monster
         if (Math.random() < 0.7) {
             const x = randomInt(room.x, room.x + room.w - 1);
             const y = randomInt(room.y, room.y + room.h - 1);
@@ -608,6 +709,17 @@ class Game {
             }
         }
 
+        // Shop (Rare, 10% chance per room, but not in first room)
+        if (Math.random() < 0.1) {
+             const x = randomInt(room.x, room.x + room.w - 1);
+             const y = randomInt(room.y, room.y + room.h - 1);
+             if (!this.getEntityAt(x, y) && (x !== this.player.x || y !== this.player.y)) {
+                 this.entities.push(new Entity(x, y, ENTITIES.SHOP));
+                 return; // Don't spawn item if shop spawned
+             }
+        }
+
+        // Items
         if (Math.random() < 0.5) {
             const x = randomInt(room.x, room.x + room.w - 1);
             const y = randomInt(room.y, room.y + room.h - 1);
@@ -647,6 +759,9 @@ class Game {
                     return;
                 } else if (target.name === 'Amulet') {
                     this.victory();
+                    return;
+                } else if (target.name === 'Merchant') {
+                    this.openShop();
                     return;
                 } else {
                     this.pickup(target);
@@ -746,16 +861,26 @@ class Game {
     processTurn(isWaiting) {
         this.updateFoW();
         const baseAggro = 8;
-        const aggroRange = isWaiting ? 20 : baseAggro;
+        let aggroRange = isWaiting ? 20 : baseAggro;
 
         if (isWaiting) this.showFloatText(this.player.x, this.player.y, "...", "#33ff33");
         
         this.entities.forEach(entity => {
             if (entity.isEnemy) {
+                // Determine if hunting based on visibility
+                const canSeePlayer = this.visible[entity.y][entity.x]; // Monster is in player FOV (simplification of LOS)
+                let currentAggro = aggroRange;
+                
+                if (GAME_SETTINGS.sightAggro && canSeePlayer) {
+                    currentAggro = 999; // Infinite range if visible and Aggro setting is on
+                    // Optionally show visual cue
+                    // if (Math.random() < 0.1) this.showFloatText(entity.x, entity.y, "!", "#ff0000");
+                }
+
                 entity.moveAccumulator += entity.speed;
                 if (entity.moveAccumulator >= 1.0) {
                     entity.moveAccumulator -= 1.0;
-                    this.moveMonster(entity, aggroRange);
+                    this.moveMonster(entity, currentAggro);
                 }
             }
         });
@@ -765,6 +890,7 @@ class Game {
 
     moveMonster(entity, range) {
         const dist = getDistance(entity.x, entity.y, this.player.x, this.player.y);
+        
         if (dist < range) {
             let dx = 0, dy = 0;
             if (Math.abs(this.player.x - entity.x) > Math.abs(this.player.y - entity.y)) {
