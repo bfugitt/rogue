@@ -123,11 +123,17 @@
     <div class="z-20 flex flex-col w-full max-w-4xl h-full p-2 md:p-4 gap-2 md:gap-4">
         
         <!-- Header / Stats -->
-        <div class="relative bg-black p-3 border-b-2 border-phosphor">
+        <div class="relative bg-black p-3 border-b-2 border-phosphor flex flex-col md:block">
             
-            <div id="highscore-display" class="absolute top-2 right-3 text-xl text-phosphor-dim font-bold">
+            <!-- High Score (Moved left/center) -->
+            <div id="highscore-display" class="md:absolute md:top-2 md:left-1/2 md:-translate-x-1/2 text-lg md:text-xl text-phosphor-dim font-bold mb-1 md:mb-0">
                 HI-SCORE: 0
             </div>
+
+            <!-- Exit Button (Top Right) -->
+            <button onclick="game.exitGame()" class="absolute top-2 right-2 border border-phosphor text-phosphor hover:bg-green-900 hover:text-white px-3 py-0 text-lg font-bold cursor-pointer z-10 bg-black">
+                [ EXIT ]
+            </button>
 
             <h1 class="text-3xl md:text-4xl text-phosphor-bright font-bold mb-1 tracking-widest">>> ROGUE.EXE</h1>
             
@@ -165,6 +171,29 @@
                     <h2 class="text-6xl text-phosphor-bright font-bold mb-4 tracking-widest">MISSION COMPLETE</h2>
                     <p class="text-phosphor text-2xl mb-6 text-center px-4">ARTIFACT RECOVERED SUCCESSFULLY.</p>
                     <div class="text-3xl text-phosphor-dim mb-6" id="final-score">SCORE: 0</div>
+                    
+                    <div class="flex gap-4">
+                        <button onclick="game.restart()" class="px-6 py-2 border-2 border-phosphor text-phosphor-dim hover:bg-green-900 hover:text-white text-xl font-bold cursor-pointer">
+                            [ END SESSION ]
+                        </button>
+                        <button onclick="game.continueGame()" class="px-6 py-2 border-2 border-phosphor text-phosphor-bright hover:bg-green-900 hover:text-white text-xl font-bold cursor-pointer shadow-[0_0_10px_rgba(51,255,51,0.5)]">
+                            [ CONTINUE MISSION ]
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Summary/Exit Screen (New) -->
+                <div id="summary-screen" class="absolute inset-0 bg-black flex flex-col items-center justify-center hidden z-30">
+                    <h2 class="text-6xl text-phosphor font-bold mb-4 tracking-widest">SESSION TERMINATED</h2>
+                    <div class="border-2 border-phosphor p-6 w-full max-w-md mb-6 bg-black shadow-[0_0_20px_rgba(51,255,51,0.2)]">
+                        <h3 class="text-2xl text-phosphor-bright border-b border-phosphor mb-4 pb-2">MISSION REPORT</h3>
+                        <div class="grid grid-cols-2 gap-4 text-xl text-phosphor-dim">
+                            <span>DEPTH REACHED:</span> <span id="summary-depth" class="text-phosphor-bright text-right font-bold">0</span>
+                            <span>GOLD ACQUIRED:</span> <span id="summary-gold" class="text-phosphor-bright text-right font-bold">0</span>
+                            <span>LEVEL:</span> <span id="summary-level" class="text-phosphor-bright text-right font-bold">0</span>
+                            <span>AMULETS SECURED:</span> <span id="summary-amulets" class="text-phosphor-bright text-right font-bold">0</span>
+                        </div>
+                    </div>
                     <button onclick="game.restart()" class="px-8 py-2 border-2 border-phosphor text-phosphor hover:bg-green-900 hover:text-white text-2xl font-bold cursor-pointer">
                         [ NEW MISSION ]
                     </button>
@@ -209,7 +238,7 @@
                     </div>
                 </div>
 
-                <!-- Shop Screen (New!) -->
+                <!-- Shop Screen -->
                 <div id="shop-screen" class="absolute inset-0 bg-black z-50 flex flex-col items-center justify-center p-4 text-center hidden">
                     <div class="border-2 border-cyan-500 bg-black p-6 max-w-md w-full shadow-[0_0_20px_rgba(0,255,255,0.2)]">
                         <h2 class="text-4xl text-cyan-400 font-bold mb-2 border-b border-cyan-900 pb-2">MERCHANT TERMINAL</h2>
@@ -217,16 +246,16 @@
                         
                         <div class="flex flex-col gap-2 mb-6 text-xl text-left">
                             <div class="shop-item" onclick="game.buyItem('potion')">
-                                <span>[1] HEALTH POTION (+12 HP)</span>
-                                <span class="text-phosphor-dim">20g</span>
+                                <span id="cost-potion-desc">[1] HEALTH POTION (+12 HP)</span>
+                                <span class="text-phosphor-dim" id="cost-potion-price"></span>
                             </div>
                             <div class="shop-item" onclick="game.buyItem('weapon')">
-                                <span>[2] UPGRADE WEAPON (+1 ATK)</span>
-                                <span class="text-phosphor-dim">50g</span>
+                                <span id="cost-weapon-desc">[2] UPGRADE WEAPON (+1 ATK)</span>
+                                <span class="text-phosphor-dim" id="cost-weapon-price"></span>
                             </div>
                             <div class="shop-item" onclick="game.buyItem('armor')">
-                                <span>[3] UPGRADE ARMOR (+1 DEF)</span>
-                                <span class="text-phosphor-dim">50g</span>
+                                <span id="cost-armor-desc">[3] UPGRADE ARMOR (+1 DEF)</span>
+                                <span class="text-phosphor-dim" id="cost-armor-price"></span>
                             </div>
                         </div>
 
@@ -239,7 +268,7 @@
                 <!-- Splash Screen -->
                 <div id="splash-screen" class="absolute inset-0 bg-black z-40 flex flex-col items-center justify-center p-4 text-center">
                     <h1 class="text-6xl md:text-8xl text-phosphor-bright font-bold mb-2">ROGUE</h1>
-                    <p class="text-xl text-phosphor-dim mb-8">v1.2 - TERMINAL EDITION</p>
+                    <p class="text-xl text-phosphor-dim mb-8">v1.4 - ENDLESS EDITION</p>
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl w-full mb-8 text-left border-2 border-phosphor p-6">
                         <div>
@@ -296,29 +325,31 @@ const GAME_SETTINGS = {
     xpMultiplier: 1.2,
     enemyDamageMultiplier: 0.8, 
     healPotionAmount: 12,
-    amuletDepth: 8,
+    amuletDepth: 8, // Levels per cycle
     turnsToHeal: 5,
-    sightAggro: true // NEW: Monsters hunt if visible
+    sightAggro: true,
+    // Shop Economy
+    shopCostPotion: 20,
+    shopCostWeapon: 50,
+    shopCostArmor: 50
 };
 
 const TILE_SIZE = 24;
 const MAP_WIDTH = 40;
 const MAP_HEIGHT = 25;
-const FONT_SIZE = 28; // Slightly larger for VT323 font legibility
+const FONT_SIZE = 28;
 
-// Color Palette (Phosphor Green)
 const COLORS = {
     WALL: '#1a801a',      // Dim Green
     FLOOR: '#0a200a',     // Very Dark Green
     FLOOR_VISIBLE: '#113311', 
     TEXT: '#33ff33',      // Bright Green
     HIGHLIGHT: '#ccffcc', // White-Green
-    DANGER: '#ff3333'     // Red (Rare usage)
+    DANGER: '#ff3333'     // Red
 };
 
-// ASCII THEME
 const ENTITIES = {
-    PLAYER: { char: '@', color: '#ccffcc' }, // The Classic Hero
+    PLAYER: { char: '@', color: '#ccffcc' },
     WALL: { char: '#', color: '#1a801a' },
     FLOOR: { char: '.', color: '#1a401a' },
     STAIRS: { char: '>', name: 'Stairs', color: '#33ff33' },
@@ -327,10 +358,9 @@ const ENTITIES = {
     POTION: { char: '!', name: 'Potion', color: '#33ff33' },
     SWORD: { char: '/', name: 'Sword', color: '#33ff33' },
     SHIELD: { char: '[', name: 'Shield', color: '#33ff33' },
-    SHOP: { char: 'M', name: 'Merchant', color: '#22d3ee' } // Cyan 'M' for merchant
+    SHOP: { char: 'M', name: 'Merchant', color: '#22d3ee' }
 };
 
-// Classic Monsters (Letters)
 const MONSTERS = [
     { name: 'Rat', char: 'r', hp: 5, atk: 2, def: 0, exp: 5, color: '#33ff33', speed: 1.0 },
     { name: 'Bat', char: 'b', hp: 6, atk: 3, def: 0, exp: 7, color: '#33ff33', speed: 1.2 },
@@ -338,7 +368,7 @@ const MONSTERS = [
     { name: 'Goblin', char: 'g', hp: 12, atk: 4, def: 1, exp: 15, color: '#33ff33', speed: 0.8 },
     { name: 'Orc', char: 'o', hp: 18, atk: 6, def: 2, exp: 25, color: '#33ff33', speed: 0.8 },
     { name: 'Slime', char: 's', hp: 20, atk: 3, def: 3, exp: 20, color: '#33ff33', speed: 0.5 },
-    { name: 'Dragon', char: 'D', hp: 50, atk: 10, def: 4, exp: 100, color: '#ccffcc', speed: 1.0 } // Bright color for boss
+    { name: 'Dragon', char: 'D', hp: 50, atk: 10, def: 4, exp: 100, color: '#ccffcc', speed: 1.0 }
 ];
 
 function randomInt(min, max) {
@@ -375,8 +405,9 @@ class Game {
         this.logContainer = document.getElementById('log-container');
         
         document.getElementById('splash-depth').innerText = `DEPTH ${GAME_SETTINGS.amuletDepth}`;
+        this.updateShopPrices();
 
-        // Initialize High Score with support for levels
+        // Initialize High Score
         const savedData = JSON.parse(localStorage.getItem('rogueHighScoreRetro')) || { gold: 0, level: 1 };
         if (typeof savedData === 'number') {
             this.highScoreGold = savedData;
@@ -400,6 +431,8 @@ class Game {
         this.turn = 0;
         this.isGameOver = false;
         this.waitCounter = 0;
+        this.cycle = 1; 
+        this.currentAmuletGoal = GAME_SETTINGS.amuletDepth;
 
         this.playerStats = {
             hp: GAME_SETTINGS.startHp,
@@ -409,13 +442,20 @@ class Game {
             level: 1,
             exp: 0,
             expToNext: 50,
-            gold: 0
+            gold: 0,
+            amulets: 0 // Track amulets for summary
         };
 
         this.initLevel();
         this.resize();
         window.addEventListener('resize', () => this.resize());
         this.setupInput();
+    }
+
+    updateShopPrices() {
+        document.getElementById('cost-potion-price').innerText = `${GAME_SETTINGS.shopCostPotion}g`;
+        document.getElementById('cost-weapon-price').innerText = `${GAME_SETTINGS.shopCostWeapon}g`;
+        document.getElementById('cost-armor-price').innerText = `${GAME_SETTINGS.shopCostArmor}g`;
     }
 
     updateHighScoreDisplay() {
@@ -426,6 +466,19 @@ class Game {
         this.gameStarted = true;
         document.getElementById('splash-screen').classList.add('hidden');
         this.log("SYSTEM INITIALIZED. ENTERING DUNGEON...", "text-phosphor-bright");
+    }
+
+    exitGame() {
+        // Trigger Summary Screen
+        this.isGameOver = true; // Pause game logic
+        this.checkHighScore(); // Save progress
+        
+        document.getElementById('summary-depth').innerText = this.depth;
+        document.getElementById('summary-gold').innerText = this.playerStats.gold;
+        document.getElementById('summary-level').innerText = this.playerStats.level;
+        document.getElementById('summary-amulets').innerText = this.playerStats.amulets;
+        
+        document.getElementById('summary-screen').classList.remove('hidden');
     }
 
     toggleHelp() {
@@ -458,7 +511,7 @@ class Game {
         let success = false;
 
         if (type === 'potion') {
-            cost = 20;
+            cost = GAME_SETTINGS.shopCostPotion;
             if (this.playerStats.gold >= cost) {
                 const heal = GAME_SETTINGS.healPotionAmount;
                 this.playerStats.hp = Math.min(this.playerStats.maxHp, this.playerStats.hp + heal);
@@ -466,14 +519,14 @@ class Game {
                 success = true;
             }
         } else if (type === 'weapon') {
-            cost = 50;
+            cost = GAME_SETTINGS.shopCostWeapon;
             if (this.playerStats.gold >= cost) {
                 this.playerStats.atk++;
                 this.log(`WEAPON UPGRADED. ATK UP.`, "text-phosphor-bright");
                 success = true;
             }
         } else if (type === 'armor') {
-            cost = 50;
+            cost = GAME_SETTINGS.shopCostArmor;
             if (this.playerStats.gold >= cost) {
                 this.playerStats.def++;
                 this.log(`ARMOR UPGRADED. DEF UP.`, "text-phosphor-bright");
@@ -517,16 +570,14 @@ class Game {
 
     setupInput() {
         window.addEventListener('keydown', (e) => {
-            // Help Toggle
             if (e.key === '?' || e.key === '/') {
                 this.toggleHelp();
                 return;
             }
-
-            // Close overlays with Escape
             if(e.key === 'Escape') {
                 if(this.isHelpOpen) this.toggleHelp();
-                if(this.isShopOpen) this.closeShop();
+                else if(this.isShopOpen) this.closeShop();
+                else if(this.gameStarted && !this.isGameOver) this.exitGame(); // Esc to exit
                 return;
             }
 
@@ -637,7 +688,7 @@ class Game {
         const endRoom = rooms[rooms.length - 1];
         const endCenter = this.getRoomCenter(endRoom);
         
-        if (this.depth === GAME_SETTINGS.amuletDepth) {
+        if (this.depth === this.currentAmuletGoal) {
             this.entities.push(new Entity(endCenter.x, endCenter.y, ENTITIES.AMULET));
         } else {
             this.entities.push(new Entity(endCenter.x, endCenter.y, ENTITIES.STAIRS));
@@ -699,13 +750,27 @@ class Game {
             const x = randomInt(room.x, room.x + room.w - 1);
             const y = randomInt(room.y, room.y + room.h - 1);
             if (x !== this.player.x || y !== this.player.y) {
+                // Calculate variety based on depth relative to start of this cycle
+                const relativeDepth = (this.depth - 1) % GAME_SETTINGS.amuletDepth;
+                
                 const maxIndex = MONSTERS.length - 1;
-                const scale = (this.depth - 1) / (GAME_SETTINGS.amuletDepth - 1);
+                const scale = relativeDepth / (GAME_SETTINGS.amuletDepth - 1);
                 const maxAvailable = Math.ceil(scale * maxIndex) + 1;
                 const difficulty = Math.min(maxIndex, Math.floor(Math.random() * maxAvailable));
                 const monsterType = MONSTERS[difficulty];
                 
-                this.entities.push(new Entity(x, y, { char: monsterType.char, color: monsterType.color }, {...monsterType}));
+                // Scale stats for New Game+ cycles
+                // +50% HP/XP and +1 ATK per cycle after the first
+                const statMultiplier = 1 + (this.cycle - 1) * 0.5;
+                const atkAdd = this.cycle - 1;
+
+                this.entities.push(new Entity(x, y, { char: monsterType.char, color: monsterType.color }, {
+                    ...monsterType,
+                    hp: Math.floor(monsterType.hp * statMultiplier),
+                    maxHp: Math.floor(monsterType.hp * statMultiplier),
+                    exp: Math.floor(monsterType.exp * statMultiplier),
+                    atk: monsterType.atk + atkAdd
+                }));
             }
         }
 
@@ -873,8 +938,6 @@ class Game {
                 
                 if (GAME_SETTINGS.sightAggro && canSeePlayer) {
                     currentAggro = 999; // Infinite range if visible and Aggro setting is on
-                    // Optionally show visual cue
-                    // if (Math.random() < 0.1) this.showFloatText(entity.x, entity.y, "!", "#ff0000");
                 }
 
                 entity.moveAccumulator += entity.speed;
@@ -940,9 +1003,19 @@ class Game {
 
     victory() {
         this.isGameOver = true;
+        this.playerStats.amulets++; // Increment tracking for amulet found
         const isNewRecord = this.checkHighScore();
         document.getElementById('victory-screen').classList.remove('hidden');
         document.getElementById('final-score').innerText = `SCORE: ${this.playerStats.gold} | LEVEL: ${this.playerStats.level}${isNewRecord ? ' (NEW RECORD)' : ''}`;
+    }
+
+    continueGame() {
+        this.cycle++;
+        this.currentAmuletGoal += GAME_SETTINGS.amuletDepth;
+        document.getElementById('victory-screen').classList.add('hidden');
+        this.log(`CYCLE ${this.cycle} INITIATED. THREAT LEVEL INCREASED.`, "text-phosphor-danger");
+        this.nextLevel();
+        this.isGameOver = false;
     }
 
     restart() {
@@ -954,20 +1027,24 @@ class Game {
             level: 1, 
             exp: 0, 
             expToNext: 50, 
-            gold: 0
+            gold: 0,
+            amulets: 0
         };
         this.depth = 1;
+        this.cycle = 1;
+        this.currentAmuletGoal = GAME_SETTINGS.amuletDepth;
         this.isGameOver = false;
         this.player = null; 
         document.getElementById('game-over-screen').classList.add('hidden');
         document.getElementById('victory-screen').classList.add('hidden');
+        document.getElementById('summary-screen').classList.add('hidden');
         this.logContainer.innerHTML = '';
         this.log('REBOOTING...');
         this.initLevel();
     }
 
     showHelp() {
-        this.log(`OBJECTIVE: RETRIEVE AMULET (&) AT DEPTH ${GAME_SETTINGS.amuletDepth}.`, 'text-phosphor-bright');
+        this.log(`OBJECTIVE: RETRIEVE AMULET (&) AT DEPTH ${this.currentAmuletGoal}.`, 'text-phosphor-bright');
         this.log('ARROWS TO MOVE. SPACE TO REPAIR.', 'text-phosphor-dim');
     }
 
