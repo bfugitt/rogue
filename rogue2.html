@@ -102,7 +102,6 @@
                 <span id="stat-mp" class="w-32 text-magic">MP: 10/10</span>
                 <span id="stat-lvl">LVL: 1</span>
                 <span id="stat-gold">GOLD: 0</span>
-                <!-- RESTORED MISSING STATS -->
                 <span id="stat-atk">ATK: 3</span>
                 <span id="stat-def">DEF: 0</span>
                 <span id="stat-depth" class="ml-auto mr-2">DEPTH: 1</span>
@@ -203,7 +202,7 @@
                 <!-- Splash -->
                 <div id="splash-screen" class="absolute inset-0 bg-black z-40 flex flex-col items-center justify-center p-4 text-center">
                     <h1 class="text-6xl md:text-8xl text-phosphor-bright font-bold mb-2">ROGUE</h1>
-                    <p class="text-xl text-phosphor-dim mb-8">v2.0 - MAGIC & TRAPS</p>
+                    <p class="text-xl text-phosphor-dim mb-8">v2.1 - LOOT & REINFORCEMENTS</p>
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl w-full mb-8 text-left border-2 border-phosphor p-6">
                         <div>
@@ -253,7 +252,10 @@ const GAME_SETTINGS = {
     healPotionAmount: 12, amuletDepth: 8,
     turnsToHeal: 5, turnsToRegenMp: 10,
     sightAggro: true,
-    shopCostPotion: 20, shopCostWeapon: 50, shopCostArmor: 50, shopCostScroll: 30
+    shopCostPotion: 20, shopCostWeapon: 50, shopCostArmor: 50, shopCostScroll: 30,
+    trapSpawnChance: 0.4, // 40% per room
+    monsterRespawnRate: 0.05, // 5% chance per turn to respawn
+    maxMonstersPerFloor: 15
 };
 
 const TILE_SIZE = 24;
@@ -332,7 +334,6 @@ class Game {
         this.ctx = this.canvas.getContext('2d');
         this.logContainer = document.getElementById('log-container');
         
-        // Fixed: Ensure element exists before accessing (it does now)
         if(document.getElementById('splash-depth')) {
             document.getElementById('splash-depth').innerText = `DEPTH ${GAME_SETTINGS.amuletDepth}`;
         }
@@ -494,7 +495,6 @@ class Game {
             });
             this.log(`${found} TRAPS REVEALED.`, "text-warning");
         } else if (spell.id === 'teleport') {
-            // Find random floor tile
             let attempts = 0;
             while(attempts < 100) {
                 const rx = randomInt(1, MAP_WIDTH-2);
@@ -564,8 +564,6 @@ class Game {
                 e.preventDefault();
             }
         });
-
-        // Touch handlers omitted for brevity, logic remains same
     }
 
     log(msg, color = 'text-phosphor-dim') {
@@ -628,18 +626,45 @@ class Game {
     hCorridor(x1, x2, y) { for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) this.map[y][x] = '.'; }
     vCorridor(y1, y2, x) { for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) this.map[y][x] = '.'; }
 
+    // Unified Monster Creation
+    createMonster(x, y) {
+        const relativeDepth = (this.depth - 1) % GAME_SETTINGS.amuletDepth;
+        const maxIndex = MONSTERS.length - 1;
+        const difficulty = Math.min(maxIndex, Math.floor(Math.random() * (Math.ceil((relativeDepth / (GAME_SETTINGS.amuletDepth - 1)) * maxIndex) + 1)));
+        const monsterType = MONSTERS[difficulty];
+        const statMultiplier = 1 + (this.cycle - 1) * 0.5;
+        
+        return new Entity(x, y, { char: monsterType.char, color: monsterType.color }, { 
+            ...monsterType, 
+            hp: Math.floor(monsterType.hp * statMultiplier), 
+            maxHp: Math.floor(monsterType.hp * statMultiplier), 
+            exp: Math.floor(monsterType.exp * statMultiplier), 
+            atk: monsterType.atk + (this.cycle - 1) 
+        });
+    }
+
+    spawnWanderingMonster() {
+        let attempts = 0;
+        while (attempts < 20) {
+            const rx = randomInt(1, MAP_WIDTH - 2);
+            const ry = randomInt(1, MAP_HEIGHT - 2);
+            // Must be floor, empty, and preferably not visible to prevent pop-in
+            if (this.map[ry][rx] === '.' && !this.getEntityAt(rx, ry) && !this.visible[ry][rx]) {
+                 this.entities.push(this.createMonster(rx, ry));
+                 this.log("HOSTILE SIGNAL DETECTED.", "text-warning");
+                 break;
+            }
+            attempts++;
+        }
+    }
+
     spawnContents(room) {
-        // Monster
+        // Monsters
         if (Math.random() < 0.7) {
             const x = randomInt(room.x, room.x + room.w - 1);
             const y = randomInt(room.y, room.y + room.h - 1);
             if (x !== this.player.x || y !== this.player.y) {
-                const relativeDepth = (this.depth - 1) % GAME_SETTINGS.amuletDepth;
-                const maxIndex = MONSTERS.length - 1;
-                const difficulty = Math.min(maxIndex, Math.floor(Math.random() * (Math.ceil((relativeDepth / (GAME_SETTINGS.amuletDepth - 1)) * maxIndex) + 1)));
-                const monsterType = MONSTERS[difficulty];
-                const statMultiplier = 1 + (this.cycle - 1) * 0.5;
-                this.entities.push(new Entity(x, y, { char: monsterType.char, color: monsterType.color }, { ...monsterType, hp: Math.floor(monsterType.hp * statMultiplier), maxHp: Math.floor(monsterType.hp * statMultiplier), exp: Math.floor(monsterType.exp * statMultiplier), atk: monsterType.atk + (this.cycle - 1) }));
+                this.entities.push(this.createMonster(x, y));
             }
         }
         // Shop
@@ -647,8 +672,8 @@ class Game {
              const x = randomInt(room.x, room.x + room.w - 1); const y = randomInt(room.y, room.y + room.h - 1);
              if (!this.getEntityAt(x, y) && (x !== this.player.x || y !== this.player.y)) { this.entities.push(new Entity(x, y, ENTITIES.SHOP)); return; }
         }
-        // Trap (New!)
-        if (Math.random() < 0.2) {
+        // Trap (Configurable Chance)
+        if (Math.random() < GAME_SETTINGS.trapSpawnChance) {
              const x = randomInt(room.x, room.x + room.w - 1); const y = randomInt(room.y, room.y + room.h - 1);
              if (!this.getEntityAt(x, y) && (x !== this.player.x || y !== this.player.y)) { this.entities.push(new Entity(x, y, ENTITIES.TRAP)); }
         }
@@ -755,6 +780,25 @@ class Game {
             if (defender.hp <= 0) {
                 this.log(`${defender.name} TERMINATED.`, 'text-phosphor-bright');
                 this.gainExp(Math.floor(defender.exp * GAME_SETTINGS.xpMultiplier));
+                
+                // Loot Logic
+                const dropChance = 0.5; // 50% chance for gold
+                if (Math.random() < dropChance) {
+                    const goldAmount = randomInt(2, 5) * (this.cycle || 1); // Scale with cycle
+                    this.entities.push(new Entity(defender.x, defender.y, ENTITIES.GOLD));
+                    // this.playerStats.gold += goldAmount; // Old instant method
+                    // this.log(`DROPPED ${goldAmount} GOLD.`, 'text-phosphor'); // Old
+                }
+                
+                const itemChance = 0.1; // 10% chance for item
+                if (Math.random() < itemChance) {
+                    // Spawn item at defender.x, defender.y
+                    const lootRoll = Math.random();
+                    let itemType = lootRoll < 0.4 ? ENTITIES.POTION : lootRoll < 0.7 ? ENTITIES.SCROLL : lootRoll < 0.85 ? ENTITIES.SWORD : ENTITIES.SHIELD;
+                    this.entities.push(new Entity(defender.x, defender.y, itemType));
+                    this.log("ITEM DETECTED.", "text-phosphor-bright");
+                }
+
                 this.entities = this.entities.filter(e => e !== defender);
             }
         } else {
@@ -811,6 +855,14 @@ class Game {
     }
 
     processTurn(isWaiting) {
+        this.turn++; // Track turns
+
+        // Respawn Logic
+        const enemyCount = this.entities.filter(e => e.isEnemy).length;
+        if (enemyCount < GAME_SETTINGS.maxMonstersPerFloor && Math.random() < GAME_SETTINGS.monsterRespawnRate) {
+            this.spawnWanderingMonster();
+        }
+
         // MP Regen
         this.mpRegenCounter++;
         if (this.mpRegenCounter >= GAME_SETTINGS.turnsToRegenMp) {
