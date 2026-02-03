@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Classroom Rogue</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@500;700&display=swap');
+        
+        body {
+            font-family: 'Fira Code', monospace;
+            background-color: #1a1a1a;
+            color: #e5e5e5;
+            overflow: hidden; /* Prevent scrolling on mobile */
+            touch-action: none;
+        }
+
+        /* Scanline effect for retro feel */
+        .scanlines {
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.1) 50%,
+                rgba(0,0,0,0.1)
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+        }
+
+        #game-canvas {
+            image-rendering: pixelated;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .btn-control {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: white;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.1s;
+            user-select: none;
+        }
+        .btn-control:active {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(0.95);
+        }
+
+        /* Custom Scrollbar for Log */
+        #log-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        #log-container::-webkit-scrollbar-track {
+            background: #2d2d2d; 
+        }
+        #log-container::-webkit-scrollbar-thumb {
+            background: #555; 
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col items-center justify-center relative">
+
+    <!-- Retro Scanlines Overlay -->
+    <div class="scanlines absolute inset-0 z-10 w-full h-full"></div>
+
+    <!-- Game Container -->
+    <div class="z-20 flex flex-col w-full max-w-4xl h-full p-2 md:p-4 gap-2 md:gap-4">
+        
+        <!-- Header / Stats -->
+        <div class="relative bg-gray-800 p-3 rounded-lg border-b-4 border-gray-600 shadow-lg">
+            
+            <!-- High Score Display -->
+            <div id="highscore-display" class="absolute top-2 right-3 text-xs text-yellow-500 opacity-80 font-mono">
+                High Score: 0
+            </div>
+
+            <h1 class="text-xl md:text-2xl text-yellow-400 font-bold mb-1">🧙‍♂️ CLASSROOM ROGUE</h1>
+            
+            <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs md:text-sm text-gray-300 items-center">
+                <span id="stat-hp" class="text-red-400 font-bold w-24">HP: 20/20</span>
+                <span id="stat-lvl" class="text-green-400">LVL: 1</span>
+                <span id="stat-atk" class="text-blue-300">ATK: 3</span>
+                <span id="stat-def" class="text-indigo-300">DEF: 0</span>
+                <span id="stat-gold" class="text-yellow-300">💰: 0</span>
+                <span id="stat-depth" class="text-purple-300 ml-auto mr-2">Floor: 1</span>
+            </div>
+        </div>
+
+        <!-- Main Game Area -->
+        <div class="flex-grow flex flex-col md:flex-row gap-4 overflow-hidden relative">
+            
+            <!-- Canvas Wrapper -->
+            <div class="relative flex-grow bg-black rounded-lg border-2 border-gray-700 flex items-center justify-center overflow-hidden">
+                <canvas id="game-canvas"></canvas>
+                
+                <!-- Floating Text Container -->
+                <div id="floating-text-container" class="absolute inset-0 pointer-events-none overflow-hidden"></div>
+                
+                <!-- Game Over Screen -->
+                <div id="game-over-screen" class="absolute inset-0 bg-black bg-opacity-90 flex flex-col items-center justify-center hidden z-30">
+                    <h2 class="text-4xl text-red-500 font-bold mb-4">You Fainted!</h2>
+                    <p id="death-message" class="text-gray-300 mb-6 text-center px-4">The dungeon was too tough this time.</p>
+                    <button onclick="game.restart()" class="px-6 py-3 bg-red-600 hover:bg-red-500 text-white rounded font-bold shadow-lg transform transition hover:scale-105 pointer-events-auto cursor-pointer">
+                        TRY AGAIN
+                    </button>
+                </div>
+
+                <!-- Victory Screen -->
+                <div id="victory-screen" class="absolute inset-0 bg-black bg-opacity-90 flex flex-col items-center justify-center hidden z-30">
+                    <h2 class="text-4xl text-yellow-400 font-bold mb-4">VICTORY!</h2>
+                    <p class="text-gray-300 mb-6 text-center px-4">You found the Amulet of Yendor and escaped!</p>
+                    <div class="text-xl text-green-400 mb-6" id="final-score">Score: 0</div>
+                    <button onclick="game.restart()" class="px-6 py-3 bg-yellow-600 hover:bg-yellow-500 text-white rounded font-bold shadow-lg transform transition hover:scale-105 pointer-events-auto cursor-pointer">
+                        PLAY AGAIN
+                    </button>
+                </div>
+
+                <!-- Splash Screen -->
+                <div id="splash-screen" class="absolute inset-0 bg-gray-900 z-40 flex flex-col items-center justify-center p-4 text-center">
+                    <h1 class="text-3xl md:text-5xl text-yellow-400 font-bold mb-6 animate-pulse">🧙‍♂️ CLASSROOM ROGUE</h1>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl w-full mb-8 text-left">
+                        <div class="bg-gray-800 p-4 rounded-lg border border-gray-600 shadow-md">
+                            <h3 class="text-green-400 font-bold mb-2 text-lg">🎯 YOUR MISSION</h3>
+                            <p class="text-gray-300 text-sm mb-2">The <span class="text-yellow-300">Amulet of Yendor</span> is on <span class="text-purple-300" id="splash-depth">Floor 8</span>.</p>
+                            <p class="text-gray-300 text-sm">Navigate the dungeon, manage your health, and find the amulet to win!</p>
+                        </div>
+
+                        <div class="bg-gray-800 p-4 rounded-lg border border-gray-600 shadow-md">
+                            <h3 class="text-blue-300 font-bold mb-2 text-lg">⌨️ CONTROLS</h3>
+                            <ul class="text-gray-300 text-sm space-y-1">
+                                <li><span class="text-white font-bold">Arrows / WASD</span> : Move & Attack</li>
+                                <li><span class="text-white font-bold">Spacebar</span> : Wait & Heal (Risky!)</li>
+                                <li><span class="text-white font-bold">Bump Enemies</span> : To tame them</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-800 p-3 rounded-lg border border-gray-600 mb-8 max-w-2xl w-full">
+                        <h3 class="text-red-400 font-bold mb-1 text-sm">💡 SURVIVAL TIPS</h3>
+                        <div class="flex flex-wrap justify-center gap-4 text-xs md:text-sm text-gray-400">
+                            <span>🧪 Potions heal you</span>
+                            <span>💤 Waiting heals slowly but attracts monsters!</span>
+                            <span>🏃‍♂️ Run from slow monsters!</span>
+                        </div>
+                    </div>
+
+                    <button onclick="game.startGame()" class="px-8 py-4 bg-green-600 hover:bg-green-500 text-white text-xl rounded-xl font-bold shadow-lg transform transition hover:scale-105 border-b-4 border-green-800 active:border-0 active:translate-y-1">
+                        ENTER THE DUNGEON
+                    </button>
+                </div>
+            </div>
+
+            <!-- Log (Sidebar on Desktop, Bottom on Mobile) -->
+            <div id="log-container" class="bg-gray-900 p-2 md:w-64 h-24 md:h-auto rounded-lg border border-gray-700 overflow-y-auto text-xs md:text-sm font-mono leading-tight">
+                <div class="text-gray-500 italic">Welcome to the dungeon...</div>
+            </div>
+        </div>
+
+        <!-- Mobile Controls -->
+        <div class="md:hidden h-40 grid grid-cols-3 grid-rows-2 gap-2 pb-2">
+            <!-- D-Pad Layout -->
+            <div class="col-start-2 row-start-1 btn-control" id="btn-up">⬆️</div>
+            <div class="col-start-1 row-start-2 btn-control" id="btn-left">⬅️</div>
+            <div class="col-start-2 row-start-2 btn-control" id="btn-down">⬇️</div>
+            <div class="col-start-3 row-start-2 btn-control" id="btn-right">➡️</div>
+            
+            <!-- Action Button (Wait) -->
+            <div class="col-start-1 row-start-1 btn-control text-sm" onclick="game.wait()">💤</div>
+            <div class="col-start-3 row-start-1 btn-control text-sm" onclick="game.showHelp()">❓</div>
+        </div>
+
+    </div>
+
+<script>
+/**
+ * CLASSROOM ROGUE
+ * A simplified roguelike for web browsers.
+ */
+
+// --- Settings for Teachers/Developers ---
+const GAME_SETTINGS = {
+    startHp: 20,
+    startAtk: 3,
+    startDef: 1,
+    xpMultiplier: 1.2, // Higher = faster leveling
+    enemyDamageMultiplier: 1, // Lower = easier enemies
+    healPotionAmount: 12,
+    amuletDepth: 8, // Level where game ends
+    turnsToHeal: 5 // Turns of waiting required to heal 1HP
+};
+
+// --- Constants & Config ---
+const TILE_SIZE = 24;
+const MAP_WIDTH = 40;
+const MAP_HEIGHT = 25;
+const FONT_SIZE = 20;
+
+const COLORS = {
+    WALL: '#444',
+    FLOOR: '#222',
+    FLOOR_VISIBLE: '#2a2a2a',
+    TEXT: '#fff'
+};
+
+const ENTITIES = {
+    PLAYER: { char: '🧙‍♂️', color: '#fff' },
+    WALL: { char: '#', color: '#555' },
+    FLOOR: { char: '.', color: '#333' },
+    STAIRS: { char: '🚪', name: 'Stairs', color: '#f0f' },
+    AMULET: { char: '💎', name: 'Amulet of Yendor', color: '#ff0' },
+    GOLD: { char: '💰', name: 'Gold', color: '#ffaa00' },
+    POTION: { char: '🍷', name: 'Health Potion', color: '#ff5555' },
+    SWORD: { char: '🗡️', name: 'Rusty Sword', color: '#aaaaff' },
+    SHIELD: { char: '🛡️', name: 'Wood Shield', color: '#aaffaa' }
+};
+
+// Speed: 1.0 = Moves every turn. 0.5 = Moves every other turn.
+// Def: Reduces incoming damage directly
+const MONSTERS = [
+    { name: 'Rat', char: '🐀', hp: 5, atk: 2, def: 0, exp: 5, color: '#aaa', speed: 1.0 },
+    { name: 'Spider', char: '🕷️', hp: 4, atk: 3, def: 0, exp: 7, color: '#643', speed: 1.0 }, // Fast, Weak
+    { name: 'Slime', char: '🦠', hp: 10, atk: 3, def: 1, exp: 10, color: '#0f0', speed: 0.5 }, // Slow, Tanky
+    { name: 'Bat', char: '🦇', hp: 8, atk: 4, def: 0, exp: 12, color: '#a0a', speed: 1.0 },
+    { name: 'Skeleton', char: '💀', hp: 12, atk: 5, def: 1, exp: 18, color: '#eec', speed: 0.8 }, // Balanced
+    { name: 'Goblin', char: '👺', hp: 15, atk: 6, def: 1, exp: 20, color: '#f00', speed: 1.5 },
+    { name: 'Golem', char: '🗿', hp: 25, atk: 8, def: 4, exp: 40, color: '#888', speed: 0.4 }, // Very slow, Hard to kill
+    { name: 'Ghost', char: '👻', hp: 20, atk: 8, def: 0, exp: 35, color: '#fff', speed: 0.6 },
+    { name: 'Dragon', char: '🐉', hp: 50, atk: 12, def: 3, exp: 100, color: '#ffaa00', speed: 1.0 } // Boss
+];
+
+// --- Utility Functions ---
+function randomInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function getDistance(x1, y1, x2, y2) {
+    return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+}
+
+// --- Classes ---
+
+class Entity {
+    constructor(x, y, type, props = {}) {
+        this.x = x;
+        this.y = y;
+        this.char = type.char;
+        this.color = type.color;
+        this.name = props.name || type.name;
+        this.hp = props.hp || 0;
+        this.maxHp = this.hp;
+        this.atk = props.atk || 0;
+        this.def = props.def || 0; // Added defense for monsters
+        this.exp = props.exp || 0;
+        this.isEnemy = !!props.hp;
+        this.isItem = !this.isEnemy;
+        
+        // Movement Logic
+        this.speed = props.speed || 1.0;
+        this.moveAccumulator = 0; // Tracks energy for movement
+    }
+}
+
+class Game {
+    constructor() {
+        this.canvas = document.getElementById('game-canvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.logContainer = document.getElementById('log-container');
+        
+        // Update Splash Screen with settings
+        document.getElementById('splash-depth').innerText = `Floor ${GAME_SETTINGS.amuletDepth}`;
+
+        // High Score Init
+        this.highScore = parseInt(localStorage.getItem('rogueHighScore')) || 0;
+        this.updateHighScoreDisplay();
+
+        // Game State
+        this.gameStarted = false; // Input lock until splash screen is dismissed
+        this.map = [];
+        this.visible = []; // 2D array for fog of war
+        this.visited = []; // 2D array for memory
+        this.entities = [];
+        this.player = null;
+        this.depth = 1;
+        this.turn = 0;
+        this.isGameOver = false;
+        
+        // Rest mechanic
+        this.waitCounter = 0;
+
+        // Player Stats
+        this.playerStats = {
+            hp: GAME_SETTINGS.startHp,
+            maxHp: GAME_SETTINGS.startHp,
+            atk: GAME_SETTINGS.startAtk,
+            def: GAME_SETTINGS.startDef,
+            level: 1,
+            exp: 0,
+            expToNext: 50,
+            gold: 0
+        };
+
+        // Initialize level data
+        this.initLevel();
+
+        // Canvas Setup
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this.setupInput();
+    }
+
+    updateHighScoreDisplay() {
+        document.getElementById('highscore-display').innerText = `High Score (Gold): ${this.highScore}`;
+    }
+
+    startGame() {
+        this.gameStarted = true;
+        document.getElementById('splash-screen').classList.add('hidden');
+        this.log("You enter the dark dungeon...", "text-yellow-300");
+    }
+
+    checkHighScore() {
+        if (this.playerStats.gold > this.highScore) {
+            this.highScore = this.playerStats.gold;
+            localStorage.setItem('rogueHighScore', this.highScore);
+            this.updateHighScoreDisplay();
+            return true; // New record
+        }
+        return false;
+    }
+
+    resize() {
+        const wrapper = this.canvas.parentElement;
+        this.canvas.width = MAP_WIDTH * TILE_SIZE;
+        this.canvas.height = MAP_HEIGHT * TILE_SIZE;
+        this.canvas.style.width = '100%';
+        this.canvas.style.height = '100%';
+        this.canvas.style.objectFit = 'contain';
+        this.draw();
+    }
+
+    setupInput() {
+        window.addEventListener('keydown', (e) => {
+            if (!this.gameStarted || this.isGameOver) return;
+            
+            let dx = 0;
+            let dy = 0;
+
+            switch(e.key) {
+                case 'ArrowUp': case 'w': dy = -1; break;
+                case 'ArrowDown': case 's': dy = 1; break;
+                case 'ArrowLeft': case 'a': dx = -1; break;
+                case 'ArrowRight': case 'd': dx = 1; break;
+                case ' ': case '.': this.wait(); return; // Wait
+            }
+
+            if (dx !== 0 || dy !== 0) {
+                this.movePlayer(dx, dy);
+                e.preventDefault();
+            }
+        });
+
+        // Touch Controls
+        const bindTouch = (id, dx, dy) => {
+            const btn = document.getElementById(id);
+            if(btn) {
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    if(this.gameStarted && !this.isGameOver) this.movePlayer(dx, dy);
+                }, { passive: false });
+                
+                btn.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    if(this.gameStarted && !this.isGameOver) this.movePlayer(dx, dy);
+                });
+            }
+        };
+
+        bindTouch('btn-up', 0, -1);
+        bindTouch('btn-down', 0, 1);
+        bindTouch('btn-left', -1, 0);
+        bindTouch('btn-right', 1, 0);
+    }
+
+    log(msg, color = 'text-gray-300') {
+        const div = document.createElement('div');
+        div.className = `mb-1 ${color}`;
+        div.innerHTML = `> ${msg}`;
+        this.logContainer.appendChild(div);
+        this.logContainer.scrollTop = this.logContainer.scrollHeight;
+    }
+
+    // --- Map Generation (Simple Rooms) ---
+    initLevel() {
+        this.entities = [];
+        this.map = [];
+        this.visible = [];
+        this.visited = [];
+        this.waitCounter = 0; // Reset rest counter on new level
+
+        // Initialize grid
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            this.map[y] = [];
+            this.visible[y] = [];
+            this.visited[y] = [];
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                this.map[y][x] = '#'; // Wall
+                this.visible[y][x] = false;
+                this.visited[y][x] = false;
+            }
+        }
+
+        // Dig Rooms
+        const rooms = [];
+        const maxRooms = 10;
+        const minSize = 4;
+        const maxSize = 8;
+
+        for (let i = 0; i < maxRooms; i++) {
+            const w = randomInt(minSize, maxSize);
+            const h = randomInt(minSize, maxSize);
+            const x = randomInt(1, MAP_WIDTH - w - 1);
+            const y = randomInt(1, MAP_HEIGHT - h - 1);
+
+            const newRoom = { x, y, w, h };
+
+            let failed = false;
+            for (let other of rooms) {
+                if (x <= other.x + other.w && x + w >= other.x &&
+                    y <= other.y + other.h && y + h >= other.y) {
+                    failed = true;
+                    break;
+                }
+            }
+
+            if (!failed) {
+                this.createRoom(newRoom);
+                if (rooms.length > 0) {
+                    const prev = rooms[rooms.length - 1];
+                    this.connectRooms(prev, newRoom);
+                }
+                rooms.push(newRoom);
+            }
+        }
+
+        // Place Player
+        const startRoom = rooms[0];
+        const center = this.getRoomCenter(startRoom);
+        
+        if (!this.player) {
+            this.player = new Entity(center.x, center.y, ENTITIES.PLAYER, { name: 'Player' });
+        } else {
+            this.player.x = center.x;
+            this.player.y = center.y;
+        }
+
+        // Place Exit/Amulet
+        const endRoom = rooms[rooms.length - 1];
+        const endCenter = this.getRoomCenter(endRoom);
+        
+        if (this.depth === GAME_SETTINGS.amuletDepth) {
+            this.entities.push(new Entity(endCenter.x, endCenter.y, ENTITIES.AMULET));
+        } else {
+            this.entities.push(new Entity(endCenter.x, endCenter.y, ENTITIES.STAIRS));
+        }
+
+        // Populate dungeon
+        rooms.forEach((room, index) => {
+            if (index === 0) return; 
+            this.spawnContents(room);
+        });
+
+        this.updateFoW();
+        this.updateUI();
+        this.log(`Entered Depth ${this.depth}.`);
+        this.draw();
+    }
+
+    createRoom(room) {
+        for (let y = room.y; y < room.y + room.h; y++) {
+            for (let x = room.x; x < room.x + room.w; x++) {
+                this.map[y][x] = '.';
+            }
+        }
+    }
+
+    getRoomCenter(room) {
+        return {
+            x: Math.floor(room.x + room.w / 2),
+            y: Math.floor(room.y + room.h / 2)
+        };
+    }
+
+    connectRooms(r1, r2) {
+        const c1 = this.getRoomCenter(r1);
+        const c2 = this.getRoomCenter(r2);
+        if (Math.random() < 0.5) {
+            this.hCorridor(c1.x, c2.x, c1.y);
+            this.vCorridor(c1.y, c2.y, c2.x);
+        } else {
+            this.vCorridor(c1.y, c2.y, c1.x);
+            this.hCorridor(c1.x, c2.x, c2.y);
+        }
+    }
+
+    hCorridor(x1, x2, y) {
+        for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) {
+            this.map[y][x] = '.';
+        }
+    }
+
+    vCorridor(y1, y2, x) {
+        for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) {
+            this.map[y][x] = '.';
+        }
+    }
+
+    spawnContents(room) {
+        // Monster Spawns
+        if (Math.random() < 0.7) {
+            const x = randomInt(room.x, room.x + room.w - 1);
+            const y = randomInt(room.y, room.y + room.h - 1);
+            if (x !== this.player.x || y !== this.player.y) {
+                // Calculate difficulty index
+                // At depth 1, we mostly want rats/spiders (index 0,1)
+                // At max depth, we want dragons
+                const maxIndex = MONSTERS.length - 1;
+                // Scale difficulty: Map depth 1..8 to index 0..max
+                const scale = (this.depth - 1) / (GAME_SETTINGS.amuletDepth - 1);
+                const maxAvailable = Math.ceil(scale * maxIndex) + 1; // +1 to give variety
+                
+                const difficulty = Math.min(maxIndex, Math.floor(Math.random() * maxAvailable));
+                const monsterType = MONSTERS[difficulty];
+                
+                this.entities.push(new Entity(x, y, { char: monsterType.char, color: monsterType.color }, 
+                    {...monsterType} // Spread to copy speed, atk, etc.
+                ));
+            }
+        }
+
+        // Item Spawns
+        if (Math.random() < 0.5) {
+            const x = randomInt(room.x, room.x + room.w - 1);
+            const y = randomInt(room.y, room.y + room.h - 1);
+            const roll = Math.random();
+            let itemType;
+            if (roll < 0.5) itemType = ENTITIES.GOLD;
+            else if (roll < 0.7) itemType = ENTITIES.POTION;
+            else if (roll < 0.85) itemType = ENTITIES.SWORD;
+            else itemType = ENTITIES.SHIELD;
+
+            if (!this.getEntityAt(x, y)) {
+                this.entities.push(new Entity(x, y, itemType));
+            }
+        }
+    }
+
+    // --- Game Logic ---
+
+    getEntityAt(x, y) {
+        return this.entities.find(e => e.x === x && e.y === y);
+    }
+
+    movePlayer(dx, dy) {
+        // Any movement resets the rest counter
+        this.waitCounter = 0;
+
+        const newX = this.player.x + dx;
+        const newY = this.player.y + dy;
+
+        // Wall Collision
+        if (this.map[newY][newX] === '#') {
+            return;
+        }
+
+        // Entity Interaction
+        const target = this.getEntityAt(newX, newY);
+        
+        if (target) {
+            if (target.isEnemy) {
+                this.attack(this.player, target);
+                this.processTurn(false);
+                return;
+            } else if (target.isItem) {
+                if (target.name === 'Stairs') {
+                    this.nextLevel();
+                    return;
+                } else if (target.name === 'Amulet of Yendor') {
+                    this.victory();
+                    return;
+                } else {
+                    this.pickup(target);
+                    this.entities = this.entities.filter(e => e !== target);
+                }
+            }
+        }
+
+        this.player.x = newX;
+        this.player.y = newY;
+        this.processTurn(false);
+    }
+
+    pickup(item) {
+        if (item.name === 'Gold') {
+            const amount = randomInt(5, 15);
+            this.playerStats.gold += amount;
+            this.log(`Picked up ${amount} Gold!`, 'text-yellow-300');
+            this.showFloatText(this.player.x, this.player.y, `+${amount}💰`, '#ff0');
+        } else if (item.name === 'Health Potion') {
+            const heal = GAME_SETTINGS.healPotionAmount;
+            this.playerStats.hp = Math.min(this.playerStats.maxHp, this.playerStats.hp + heal);
+            this.log(`Drank potion. Healed ${heal} HP.`, 'text-red-400');
+            this.showFloatText(this.player.x, this.player.y, `+${heal}❤️`, '#f00');
+        } else if (item.name === 'Rusty Sword') {
+            this.playerStats.atk += 1;
+            this.log(`Found a Sword! Attack +1.`, 'text-blue-300');
+            this.showFloatText(this.player.x, this.player.y, `+1⚔️`, '#aaf');
+        } else if (item.name === 'Wood Shield') {
+            this.playerStats.def += 1;
+            this.log(`Found a Shield! Defense +1.`, 'text-green-300');
+            this.showFloatText(this.player.x, this.player.y, `+1🛡️`, '#afa');
+        }
+        this.updateUI();
+    }
+
+    attack(attacker, defender) {
+        let dmg;
+        if (attacker === this.player) {
+            dmg = Math.max(1, this.playerStats.atk - (defender.def || 0));
+            defender.hp -= dmg;
+            this.log(`You hit ${defender.name} for ${dmg} dmg.`);
+            this.showFloatText(defender.x, defender.y, `-${dmg}`, '#fff');
+            
+            if (defender.hp <= 0) {
+                this.log(`${defender.name} was defeated!`, 'text-red-500');
+                const xpGain = Math.floor(defender.exp * GAME_SETTINGS.xpMultiplier);
+                this.gainExp(xpGain);
+                this.entities = this.entities.filter(e => e !== defender);
+            }
+        } else {
+            // Monster attacking player
+            const defense = Math.floor(this.playerStats.def / 2);
+            dmg = Math.max(0, attacker.atk - defense);
+            dmg = Math.floor(dmg * GAME_SETTINGS.enemyDamageMultiplier); // Difficulty tweak
+            this.playerStats.hp -= dmg;
+            this.log(`${attacker.name} hits you for ${dmg} dmg!`, 'text-orange-400');
+            this.showFloatText(this.player.x, this.player.y, `-${dmg}`, '#f00');
+            
+            if (this.playerStats.hp <= 0) {
+                this.gameOver();
+            }
+        }
+        this.updateUI();
+    }
+
+    gainExp(amount) {
+        this.playerStats.exp += amount;
+        if (this.playerStats.exp >= this.playerStats.expToNext) {
+            this.playerStats.level++;
+            this.playerStats.exp -= this.playerStats.expToNext;
+            this.playerStats.expToNext = Math.floor(this.playerStats.expToNext * 1.5);
+            this.playerStats.maxHp += 5;
+            this.playerStats.hp = this.playerStats.maxHp;
+            this.playerStats.atk += 1;
+            this.log(`LEVEL UP! You are now level ${this.playerStats.level}.`, 'text-yellow-400 font-bold');
+            this.showFloatText(this.player.x, this.player.y, `LEVEL UP!`, '#ff0');
+        }
+    }
+
+    wait() {
+        if(!this.isGameOver) {
+            this.waitCounter++;
+            
+            // Healing mechanic
+            if (this.waitCounter >= GAME_SETTINGS.turnsToHeal) {
+                if (this.playerStats.hp < this.playerStats.maxHp) {
+                    this.playerStats.hp++;
+                    this.log("Resting recovered 1 HP.", "text-green-400");
+                    this.showFloatText(this.player.x, this.player.y, `+1❤️`, '#0f0');
+                }
+                this.waitCounter = 0;
+            } else {
+                this.log(`Waiting... (${this.waitCounter}/${GAME_SETTINGS.turnsToHeal})`);
+            }
+            
+            // Pass true to indicate we are waiting (triggers noise/aggro)
+            this.processTurn(true);
+        }
+    }
+
+    processTurn(isWaiting) {
+        this.updateFoW();
+        
+        // Base Aggro Range
+        const baseAggro = 8;
+        // If waiting, player makes noise! Aggro range increases significantly
+        const aggroRange = isWaiting ? 20 : baseAggro;
+
+        if (isWaiting) {
+             // Visual indication of noise
+             this.showFloatText(this.player.x, this.player.y, "🔊", "#fff");
+        }
+        
+        // Enemies move based on Speed
+        this.entities.forEach(entity => {
+            if (entity.isEnemy) {
+                // Add speed to accumulator
+                entity.moveAccumulator += entity.speed;
+                
+                // If they have enough energy to move (>= 1)
+                if (entity.moveAccumulator >= 1.0) {
+                    entity.moveAccumulator -= 1.0; // Spend energy
+                    this.moveMonster(entity, aggroRange);
+                }
+            }
+        });
+
+        this.draw();
+        this.updateUI();
+    }
+
+    moveMonster(entity, range) {
+        const dist = getDistance(entity.x, entity.y, this.player.x, this.player.y);
+        
+        if (dist < range) { // Aggro range dynamic
+            // Simple pathfinding
+            let dx = 0, dy = 0;
+            if (Math.abs(this.player.x - entity.x) > Math.abs(this.player.y - entity.y)) {
+                dx = this.player.x > entity.x ? 1 : -1;
+            } else {
+                dy = this.player.y > entity.y ? 1 : -1;
+            }
+
+            const nextX = entity.x + dx;
+            const nextY = entity.y + dy;
+
+            if (nextX === this.player.x && nextY === this.player.y) {
+                this.attack(entity, this.player);
+            } else if (this.map[nextY][nextX] !== '#' && !this.getEntityAt(nextX, nextY)) {
+                entity.x = nextX;
+                entity.y = nextY;
+            }
+        }
+    }
+
+    updateFoW() {
+        const viewRadius = 7;
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                this.visible[y][x] = false;
+                if (getDistance(this.player.x, this.player.y, x, y) < viewRadius) {
+                    this.visible[y][x] = true;
+                    this.visited[y][x] = true;
+                }
+            }
+        }
+    }
+
+    nextLevel() {
+        this.depth++;
+        this.log(`You descend deeper... (Floor ${this.depth})`, 'text-purple-400');
+        this.initLevel();
+    }
+
+    gameOver() {
+        this.isGameOver = true;
+        this.checkHighScore();
+        this.draw(); 
+        document.getElementById('game-over-screen').classList.remove('hidden');
+        document.getElementById('death-message').innerText = `You fainted on Floor ${this.depth}.`;
+    }
+
+    victory() {
+        this.isGameOver = true;
+        const isNewRecord = this.checkHighScore();
+        document.getElementById('victory-screen').classList.remove('hidden');
+        document.getElementById('final-score').innerText = `Gold: ${this.playerStats.gold} | Level: ${this.playerStats.level}${isNewRecord ? ' (NEW RECORD!)' : ''}`;
+    }
+
+    restart() {
+        this.playerStats = {
+            hp: GAME_SETTINGS.startHp, 
+            maxHp: GAME_SETTINGS.startHp, 
+            atk: GAME_SETTINGS.startAtk, 
+            def: GAME_SETTINGS.startDef, 
+            level: 1, 
+            exp: 0, 
+            expToNext: 50, 
+            gold: 0
+        };
+        this.depth = 1;
+        this.isGameOver = false;
+        this.player = null; // Reset pos
+        document.getElementById('game-over-screen').classList.add('hidden');
+        document.getElementById('victory-screen').classList.add('hidden');
+        this.logContainer.innerHTML = '';
+        this.log('New game started.');
+        this.initLevel();
+    }
+
+    showHelp() {
+        this.log(`Goal: Reach floor ${GAME_SETTINGS.amuletDepth} and find the 💎 Amulet.`, 'text-blue-300');
+        this.log('Controls: Arrows/WASD to move. Space to wait.', 'text-gray-400');
+        this.log('Hint: Resting (Space) heals you but attracts enemies!', 'text-green-300');
+    }
+
+    // --- Rendering ---
+    draw() {
+        // Clear background
+        this.ctx.fillStyle = '#000';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        const offsetX = 0;
+        const offsetY = 0;
+
+        this.ctx.font = `${FONT_SIZE}px 'Fira Code'`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                const px = x * TILE_SIZE + TILE_SIZE / 2 + offsetX;
+                const py = y * TILE_SIZE + TILE_SIZE / 2 + offsetY;
+
+                if (this.visible[y][x]) {
+                    // Visible
+                    if (this.map[y][x] === '#') {
+                        this.ctx.fillStyle = COLORS.WALL;
+                        this.ctx.fillText('#', px, py);
+                    } else {
+                        this.ctx.fillStyle = COLORS.FLOOR_VISIBLE;
+                        this.ctx.fillText('.', px, py);
+                    }
+                } else if (this.visited[y][x]) {
+                    // Memory
+                    this.ctx.fillStyle = '#222'; // Dim
+                    this.ctx.fillText(this.map[y][x], px, py);
+                }
+            }
+        }
+
+        // Draw Entities (only visible ones)
+        this.entities.forEach(e => {
+            if (this.visible[e.y][e.x]) {
+                const px = e.x * TILE_SIZE + TILE_SIZE / 2 + offsetX;
+                const py = e.y * TILE_SIZE + TILE_SIZE / 2 + offsetY;
+                this.ctx.fillStyle = e.color || '#fff';
+                this.ctx.fillText(e.char, px, py);
+            }
+        });
+
+        // Draw Player
+        if (this.player) {
+            const pPx = this.player.x * TILE_SIZE + TILE_SIZE / 2 + offsetX;
+            const pPy = this.player.y * TILE_SIZE + TILE_SIZE / 2 + offsetY;
+            this.ctx.fillStyle = ENTITIES.PLAYER.color;
+            this.ctx.fillText(ENTITIES.PLAYER.char, pPx, pPy);
+        }
+    }
+
+    updateUI() {
+        document.getElementById('stat-hp').innerText = `HP: ${this.playerStats.hp}/${this.playerStats.maxHp}`;
+        document.getElementById('stat-lvl').innerText = `LVL: ${this.playerStats.level}`;
+        document.getElementById('stat-gold').innerText = `💰: ${this.playerStats.gold}`;
+        document.getElementById('stat-depth').innerText = `Floor: ${this.depth}`;
+        document.getElementById('stat-atk').innerText = `ATK: ${this.playerStats.atk}`;
+        document.getElementById('stat-def').innerText = `DEF: ${this.playerStats.def}`;
+        
+        // Color HP warning
+        const hpElem = document.getElementById('stat-hp');
+        if (this.playerStats.hp < this.playerStats.maxHp * 0.3) {
+            hpElem.className = 'text-red-600 font-bold animate-pulse w-24';
+        } else {
+            hpElem.className = 'text-red-400 font-bold w-24';
+        }
+    }
+
+    showFloatText(x, y, text, color) {
+        const container = document.getElementById('floating-text-container');
+        const el = document.createElement('div');
+        
+        const left = (x / MAP_WIDTH) * 100;
+        const top = (y / MAP_HEIGHT) * 100;
+
+        el.style.left = `${left}%`;
+        el.style.top = `${top}%`;
+        el.style.color = color;
+        el.className = 'absolute font-bold text-sm pointer-events-none transition-all duration-1000 transform -translate-y-4 opacity-0';
+        el.style.textShadow = '1px 1px 0 #000';
+        el.innerText = text;
+
+        container.appendChild(el);
+
+        requestAnimationFrame(() => {
+            el.classList.remove('opacity-0');
+            el.style.transform = `translateY(-30px)`;
+            el.style.opacity = '0';
+        });
+
+        setTimeout(() => {
+            el.remove();
+        }, 1000);
+    }
+}
+
+// Start Game
+let game;
+window.onload = () => {
+    game = new Game();
+};
+
+</script>
+</body>
+</html>
