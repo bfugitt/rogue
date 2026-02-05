@@ -283,9 +283,9 @@
                 </div>
 
                 <!-- Splash -->
-                <div id="splash-screen" class="absolute inset-0 bg-black z-40 flex flex-col items-center justify-center p-4 text-center" onclick="game.startGame()">
+                <div id="splash-screen" class="absolute inset-0 bg-black z-40 flex flex-col items-center justify-center p-4 text-center overflow-y-auto" onclick="game.startGame()">
                     <h1 class="text-6xl md:text-8xl text-phosphor-bright font-bold mb-2 splash-title">ROGUE</h1>
-                    <p class="text-xl text-phosphor-dim mb-8">v2.6 - FINAL POLISH</p>
+                    <p class="text-xl text-phosphor-dim mb-8">v2.7 - TERMINAL EDITION</p>
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl w-full mb-8 text-left border-2 border-phosphor p-6" onclick="event.stopPropagation()">
                         <div>
@@ -942,10 +942,13 @@ class Game {
              const x = randomInt(room.x, room.x + room.w - 1); const y = randomInt(room.y, room.y + room.h - 1);
              if (!this.getEntityAt(x, y) && (x !== this.player.x || y !== this.player.y)) { this.entities.push(new Entity(x, y, ENTITIES.SHOP)); return; }
         }
-        // Trap (Configurable Chance)
-        if (Math.random() < GAME_SETTINGS.trapSpawnChance) {
+        // Trap (Configurable Chance) - Loop to increase density as requested
+        const trapsInRoom = randomInt(0, 2); // 0 to 2 traps per room
+        for(let i=0; i<trapsInRoom; i++) {
              const x = randomInt(room.x, room.x + room.w - 1); const y = randomInt(room.y, room.y + room.h - 1);
-             if (!this.getEntityAt(x, y) && (x !== this.player.x || y !== this.player.y)) { this.entities.push(new Entity(x, y, ENTITIES.TRAP)); }
+             if (!this.getEntityAt(x, y) && (x !== this.player.x || y !== this.player.y)) { 
+                 this.entities.push(new Entity(x, y, ENTITIES.TRAP)); 
+             }
         }
         // Items
         if (Math.random() < 0.5) {
@@ -1012,7 +1015,7 @@ class Game {
 
     pickup(item) {
         if (item.name === 'Gold') {
-            const amount = randomInt(5, 15);
+            const amount = randomInt(8, 20); // Increased gold drops slightly
             this.playerStats.gold += amount;
             this.log(`ACQUIRED ${amount} GOLD`, 'text-phosphor-bright');
             this.showFloatText(this.player.x, this.player.y, `+$${amount}`, '#ccffcc');
@@ -1219,13 +1222,13 @@ class Game {
         });
 
         this.logContainer.innerHTML = ''; 
-        
+        this.initLevel(); // Always generate level 1 structure
+
         if (fullReset) {
-            this.gameStarted = false; // Immediately disable input
+            this.gameStarted = false; 
             document.getElementById('splash-screen').classList.remove('hidden');
         } else {
             this.log('REBOOTING...');
-            this.initLevel();
             this.showLevelIntro();
         }
     }
