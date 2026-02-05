@@ -100,17 +100,23 @@
         .modal-layout {
             display: flex;
             flex-direction: column;
-            max-height: 85vh; /* Ensure it fits on screen */
+            max-height: 80vh; /* Fits within viewport */
         }
         .modal-content {
             flex-grow: 1;
-            overflow-y: auto; /* Scrollable middle section */
+            overflow-y: auto; 
             min-height: 0;
-            padding-right: 0.5rem; /* Space for scrollbar */
+            padding-right: 0.5rem; 
         }
         .modal-footer {
             flex-none: true;
             margin-top: 1rem;
+        }
+
+        /* Responsive Text Adjustments */
+        @media (max-height: 600px) {
+            .splash-title { font-size: 4rem; }
+            .splash-text { font-size: 1rem; }
         }
     </style>
 </head>
@@ -126,7 +132,7 @@
             <div id="highscore-display" class="md:absolute md:top-2 md:left-1/2 md:-translate-x-1/2 text-lg md:text-xl text-phosphor-dim font-bold mb-1 md:mb-0">
                 HI-SCORE: 0
             </div>
-            <button onclick="game.exitGame()" class="absolute top-2 right-2 border border-phosphor text-phosphor hover:bg-green-900 hover:text-white px-3 py-0 text-lg font-bold cursor-pointer z-10 bg-black">
+            <button onclick="game.askExit()" class="absolute top-2 right-2 border border-phosphor text-phosphor hover:bg-green-900 hover:text-white px-3 py-0 text-lg font-bold cursor-pointer z-10 bg-black">
                 [ EXIT ]
             </button>
 
@@ -168,6 +174,40 @@
                     </div>
                 </div>
 
+                <!-- Exit Confirmation -->
+                <div id="confirmation-screen" class="absolute inset-0 bg-black z-50 flex flex-col items-center justify-center hidden">
+                    <div class="border-2 border-phosphor bg-black p-8 text-center shadow-[0_0_20px_rgba(51,255,51,0.2)]">
+                        <h2 class="text-4xl text-phosphor-warning mb-6">TERMINATE SESSION?</h2>
+                        <div class="flex gap-6 justify-center">
+                            <button onclick="game.confirmExit()" class="px-6 py-2 border-2 border-phosphor text-phosphor-danger hover:bg-red-900 text-2xl font-bold">[ YES ]</button>
+                            <button onclick="game.cancelExit()" class="px-6 py-2 border-2 border-phosphor text-phosphor hover:bg-green-900 text-2xl font-bold">[ NO ]</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Level Transition Screen -->
+                <div id="level-intro-screen" class="absolute inset-0 bg-black z-40 flex flex-col items-center justify-center hidden">
+                    <div class="border-2 border-phosphor bg-black p-6 w-full max-w-lg shadow-[0_0_20px_rgba(51,255,51,0.2)]">
+                        <h2 class="text-6xl text-phosphor-bright font-bold mb-4 border-b border-phosphor pb-2 text-center" id="intro-title">DEPTH 1</h2>
+                        
+                        <div class="mb-6">
+                            <h3 class="text-2xl text-phosphor-dim mb-2 underline">POTENTIAL THREATS:</h3>
+                            <div id="intro-monsters" class="text-xl text-phosphor grid grid-cols-2 gap-2"></div>
+                        </div>
+
+                        <div class="mb-6">
+                            <h3 class="text-2xl text-phosphor-dim mb-2 underline">HAZARDS:</h3>
+                            <div class="text-xl text-warning">TRAPS DETECTED: <span id="intro-traps" class="font-bold">0</span></div>
+                        </div>
+
+                        <div class="text-center mt-8">
+                            <button onclick="game.closeLevelIntro()" class="px-8 py-2 border-2 border-phosphor text-phosphor hover:bg-green-900 text-2xl font-bold animate-pulse">
+                                PRESS [SPACE] TO ENTER
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Summary -->
                 <div id="summary-screen" class="absolute inset-0 bg-black flex flex-col items-center justify-center hidden z-30">
                     <h2 class="text-6xl text-phosphor font-bold mb-4">SESSION TERMINATED</h2>
@@ -189,7 +229,9 @@
                         <div class="flex flex-col gap-2 text-xl text-left modal-content" id="shop-list">
                             <!-- Populated by JS -->
                         </div>
-                        <button onclick="game.closeOverlays()" class="px-8 py-2 border-2 border-cyan-500 text-cyan-400 hover:bg-cyan-900 text-2xl font-bold w-full modal-footer">[ DISCONNECT ]</button>
+                        <button onclick="game.closeOverlays()" class="px-8 py-2 border-2 border-cyan-500 text-cyan-400 hover:bg-cyan-900 text-2xl font-bold w-full modal-footer">
+                            [ DISCONNECT (SPACE) ]
+                        </button>
                     </div>
                 </div>
 
@@ -201,54 +243,60 @@
                         <div class="flex flex-col gap-2 text-xl text-left modal-content" id="spell-list">
                             <!-- Populated by JS -->
                         </div>
-                        <button onclick="game.closeOverlays()" class="px-8 py-2 border-2 border-purple-500 text-purple-400 hover:bg-purple-900 text-2xl font-bold w-full modal-footer">[ CLOSE ]</button>
+                        <button onclick="game.closeOverlays()" class="px-8 py-2 border-2 border-purple-500 text-purple-400 hover:bg-purple-900 text-2xl font-bold w-full modal-footer">
+                            [ CLOSE (SPACE) ]
+                        </button>
                     </div>
                 </div>
 
                 <!-- Help -->
                 <div id="help-screen" class="absolute inset-0 bg-black z-50 flex flex-col items-center justify-center p-4 text-center hidden">
-                    <div class="border-2 border-phosphor bg-black p-6 max-w-md w-full">
-                        <h2 class="text-4xl text-phosphor-bright font-bold mb-4 border-b border-phosphor">MANUAL</h2>
-                        <div class="grid grid-cols-2 gap-8 mb-6 text-left text-xl">
-                            <div>
-                                <h3 class="text-phosphor-dim underline">ENTITIES</h3>
-                                <div class="legend-grid">
-                                    <span class="text-phosphor-bright">@</span> <span>PLAYER</span>
-                                    <span class="text-phosphor">r,g</span> <span>FOE</span>
-                                    <span class="text-cyan-400">M</span> <span>SHOP</span>
-                                    <span class="text-warning">^</span> <span>TRAP</span>
+                    <div class="border-2 border-phosphor bg-black p-6 max-w-md w-full modal-layout">
+                        <h2 class="text-4xl text-phosphor-bright font-bold mb-4 border-b border-phosphor flex-none">MANUAL</h2>
+                        <div class="modal-content">
+                            <div class="grid grid-cols-2 gap-8 mb-6 text-left text-xl">
+                                <div>
+                                    <h3 class="text-phosphor-dim underline">ENTITIES</h3>
+                                    <div class="legend-grid">
+                                        <span class="text-phosphor-bright">@</span> <span>PLAYER</span>
+                                        <span class="text-phosphor">r,g</span> <span>FOE</span>
+                                        <span class="text-cyan-400">M</span> <span>SHOP</span>
+                                        <span class="text-warning">^</span> <span>TRAP</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h3 class="text-phosphor-dim underline">ITEMS</h3>
+                                    <div class="legend-grid">
+                                        <span class="text-phosphor">$</span> <span>GOLD</span>
+                                        <span class="text-phosphor">!</span> <span>POTION</span>
+                                        <span class="text-magic">=</span> <span>SCROLL</span>
+                                        <span class="text-phosphor-bright">&</span> <span>GOAL</span>
+                                    </div>
                                 </div>
                             </div>
-                            <div>
-                                <h3 class="text-phosphor-dim underline">ITEMS</h3>
-                                <div class="legend-grid">
-                                    <span class="text-phosphor">$</span> <span>GOLD</span>
-                                    <span class="text-phosphor">!</span> <span>POTION</span>
-                                    <span class="text-magic">=</span> <span>SCROLL</span>
-                                    <span class="text-phosphor-bright">&</span> <span>GOAL</span>
-                                </div>
-                            </div>
+                            <p class="text-lg text-phosphor-dim mb-4">KEYS: [ARROWS] Move, [SPACE] Wait, [M] Magic</p>
                         </div>
-                        <p class="text-lg text-phosphor-dim mb-4">KEYS: [ARROWS] Move, [SPACE] Wait, [M] Magic</p>
-                        <button onclick="game.closeOverlays()" class="px-8 py-2 border-2 border-phosphor text-phosphor hover:bg-green-900 text-2xl font-bold w-full">[ RESUME ]</button>
+                        <button onclick="game.closeOverlays()" class="px-8 py-2 border-2 border-phosphor text-phosphor hover:bg-green-900 text-2xl font-bold w-full modal-footer">
+                            [ RESUME (SPACE) ]
+                        </button>
                     </div>
                 </div>
 
                 <!-- Splash -->
                 <div id="splash-screen" class="absolute inset-0 bg-black z-40 flex flex-col items-center justify-center p-4 text-center" onclick="game.startGame()">
-                    <h1 class="text-6xl md:text-8xl text-phosphor-bright font-bold mb-2">ROGUE</h1>
-                    <p class="text-xl text-phosphor-dim mb-8">v2.3 - ARCANE UPDATE</p>
+                    <h1 class="text-6xl md:text-8xl text-phosphor-bright font-bold mb-2 splash-title">ROGUE</h1>
+                    <p class="text-xl text-phosphor-dim mb-8">v2.6 - FINAL POLISH</p>
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl w-full mb-8 text-left border-2 border-phosphor p-6" onclick="event.stopPropagation()">
                         <div>
                             <h3 class="text-phosphor-bright font-bold mb-2 text-2xl border-b border-phosphor inline-block">OBJECTIVE</h3>
-                            <p class="text-phosphor text-xl mb-2">Retrieve the <span class="text-phosphor-bright">&</span> Amulet from <span class="text-phosphor-bright" id="splash-depth">Depth 8</span>.</p>
-                            <p class="text-phosphor-dim text-lg">System stability critical. Maintain HP levels.</p>
+                            <p class="text-phosphor text-xl mb-2 splash-text">Retrieve the <span class="text-phosphor-bright">&</span> Amulet from <span class="text-phosphor-bright" id="splash-depth">Depth 8</span>.</p>
+                            <p class="text-phosphor-dim text-lg splash-text">System stability critical. Maintain HP levels.</p>
                         </div>
 
                         <div>
                             <h3 class="text-phosphor-bright font-bold mb-2 text-2xl border-b border-phosphor inline-block">INPUTS</h3>
-                            <ul class="text-phosphor text-xl space-y-1">
+                            <ul class="text-phosphor text-xl space-y-1 splash-text">
                                 <li>[ARROWS] : Navigate / Engage</li>
                                 <li>[SPACE]  : Standby / Repair</li>
                                 <li>[M]      : Cast Spells</li>
@@ -256,7 +304,7 @@
                         </div>
                     </div>
 
-                    <button class="px-12 py-4 border-2 border-phosphor text-phosphor-bright hover:bg-green-900 text-3xl font-bold transition-all hover:scale-105 shadow-[0_0_15px_rgba(51,255,51,0.5)]">
+                    <button class="px-12 py-4 border-2 border-phosphor text-phosphor-bright hover:bg-green-900 text-3xl font-bold transition-all hover:scale-105 shadow-[0_0_15px_rgba(51,255,51,0.5)] splash-title">
                         CLICK OR PRESS [SPACE]
                     </button>
                 </div>
@@ -279,7 +327,7 @@
 
 <script>
 /**
- * CLASSROOM ROGUE: MAGIC & TRAPS UPDATE
+ * CLASSROOM ROGUE: FINAL POLISH
  */
 
 const GAME_SETTINGS = {
@@ -293,8 +341,7 @@ const GAME_SETTINGS = {
     trapSpawnChance: 0.4, 
     monsterRespawnRate: 0.05, 
     maxMonstersPerFloor: 15,
-    mpPerLevel: 3, // Amount max MP goes up on level
-    hpPerLevel: 5
+    mpPerLevel: 3, hpPerLevel: 5
 };
 
 const TILE_SIZE = 24;
@@ -323,13 +370,9 @@ const ENTITIES = {
     SCROLL: { char: '=', name: 'Scroll', color: '#a855f7' }
 };
 
-// Defined Spell Types
 const SPELLS = {
-    // Grimoire Spells (Permanent, Cost MP)
     HEAL: { id: 'heal', name: 'HEAL', type: 'spell', cost: 4, desc: '+8 HP' },
     SMITE: { id: 'smite', name: 'SMITE', type: 'spell', cost: 6, desc: 'AREA DMG' },
-    
-    // Scroll Spells (Consumable, 0 MP)
     FIREBALL: { id: 'fireball', name: 'FIREBALL', type: 'scroll', desc: 'BIG DMG (1x)' },
     REVEAL: { id: 'reveal', name: 'REVEAL', type: 'scroll', desc: 'SEE TRAPS (1x)' },
     TELEPORT: { id: 'teleport', name: 'WARP', type: 'scroll', desc: 'ESCAPE (1x)' },
@@ -360,15 +403,23 @@ class Entity {
         this.hp = props.hp || 0; this.maxHp = this.hp;
         this.atk = props.atk || 0; this.def = props.def || 0;
         this.exp = props.exp || 0;
-        this.isEnemy = !!props.hp; this.isItem = !this.isEnemy;
+        
+        // Critical Trap Fix: Ensure proper flags
+        if (type === ENTITIES.TRAP) {
+            this.isTrap = true;
+            this.isItem = false; 
+            this.isEnemy = false;
+            this.visible = false; 
+            this.trapType = Math.random() < 0.3 ? 'poison' : 'spike';
+        } else {
+            this.isEnemy = !!props.hp; 
+            this.isItem = !this.isEnemy;
+            this.isTrap = false;
+        }
+
         this.speed = props.speed || 1.0; this.moveAccumulator = 0;
         this.poisonous = props.poison || false;
         
-        if (type === ENTITIES.TRAP) {
-            this.isTrap = true;
-            this.visible = false; 
-            this.trapType = Math.random() < 0.3 ? 'poison' : 'spike';
-        }
         if (type === ENTITIES.SCROLL) {
             this.spellId = SCROLL_DROP_TABLE[randomInt(0, SCROLL_DROP_TABLE.length - 1)];
         }
@@ -399,23 +450,22 @@ class Game {
         this.waitCounter = 0; this.mpRegenCounter = 0;
         this.cycle = 1; this.currentAmuletGoal = GAME_SETTINGS.amuletDepth;
         this.freezeTimer = 0; 
-        
-        this.spellMenuKeyMap = {}; // Maps key '1' -> function
+        this.spellMenuKeyMap = {}; 
 
         this.playerStats = {
             hp: GAME_SETTINGS.startHp, maxHp: GAME_SETTINGS.startHp,
             mp: GAME_SETTINGS.startMp, maxMp: GAME_SETTINGS.maxMp,
             atk: GAME_SETTINGS.startAtk, def: GAME_SETTINGS.startDef,
             level: 1, exp: 0, expToNext: 50, gold: 0, amulets: 0,
-            knownSpells: ['heal'], // Permanent spells
-            scrolls: {}, // Inventory of scrolls { 'fireball': 2 }
-            status: { poison: 0 }
+            knownSpells: ['heal'], scrolls: {}, status: { poison: 0 }
         };
 
         this.initLevel();
         this.resize();
         window.addEventListener('resize', () => this.resize());
         this.setupInput();
+        
+        this.gameStarted = false;
     }
 
     updateHighScoreDisplay() {
@@ -426,24 +476,65 @@ class Game {
         this.gameStarted = true;
         document.getElementById('splash-screen').classList.add('hidden');
         this.log("SYSTEM INITIALIZED...", "text-phosphor-bright");
+        this.showLevelIntro();
     }
 
-    exitGame() {
-        this.isGameOver = true;
-        this.checkHighScore();
-        document.getElementById('summary-depth').innerText = this.depth;
-        document.getElementById('summary-gold').innerText = this.playerStats.gold;
-        document.getElementById('summary-level').innerText = this.playerStats.level;
-        document.getElementById('summary-amulets').innerText = this.playerStats.amulets;
-        document.getElementById('summary-screen').classList.remove('hidden');
+    askExit() {
+        if(!this.gameStarted || this.isGameOver) return;
+        this.overlayOpen = true;
+        document.getElementById('confirmation-screen').classList.remove('hidden');
+    }
+
+    confirmExit() {
+        document.getElementById('confirmation-screen').classList.add('hidden');
+        this.overlayOpen = false;
+        this.restart(true); 
+    }
+
+    cancelExit() {
+        document.getElementById('confirmation-screen').classList.add('hidden');
+        this.overlayOpen = false;
     }
 
     closeOverlays() {
-        document.getElementById('shop-screen').classList.add('hidden');
-        document.getElementById('help-screen').classList.add('hidden');
-        document.getElementById('spell-screen').classList.add('hidden');
+        const ids = ['shop-screen', 'help-screen', 'spell-screen', 'level-intro-screen', 'confirmation-screen', 'summary-screen'];
+        ids.forEach(id => document.getElementById(id).classList.add('hidden'));
         this.overlayOpen = false;
         this.spellMenuKeyMap = {};
+    }
+
+    showLevelIntro() {
+        this.overlayOpen = true;
+        document.getElementById('level-intro-screen').classList.remove('hidden');
+        document.getElementById('intro-title').innerText = `DEPTH ${this.depth}`;
+        
+        // Calculate POTENTIAL monsters based on depth logic
+        const potential = [];
+        const relativeDepth = (this.depth - 1) % GAME_SETTINGS.amuletDepth;
+        const maxIndex = MONSTERS.length - 1;
+        const scale = relativeDepth / (GAME_SETTINGS.amuletDepth - 1);
+        const maxAvailable = Math.ceil(scale * maxIndex) + 1;
+        
+        for(let i=0; i < Math.min(maxAvailable, MONSTERS.length); i++) {
+            potential.push(MONSTERS[i].name);
+        }
+
+        // Count actual traps
+        let traps = 0;
+        this.entities.forEach(e => { if(e.isTrap) traps++; });
+
+        const list = document.getElementById('intro-monsters');
+        list.innerHTML = '';
+        potential.forEach(name => {
+            list.innerHTML += `<span class="text-phosphor-bright">> ${name}</span>`;
+        });
+        
+        document.getElementById('intro-traps').innerText = traps;
+    }
+
+    closeLevelIntro() {
+        document.getElementById('level-intro-screen').classList.add('hidden');
+        this.overlayOpen = false;
     }
 
     toggleHelp() {
@@ -469,7 +560,7 @@ class Game {
         addItem(2, "MYSTERY SCROLL", GAME_SETTINGS.shopCostScroll, () => this.buyItem('scroll'));
         addItem(3, "UPGRADE WEAPON", GAME_SETTINGS.shopCostWeapon, () => this.buyItem('weapon'));
         addItem(4, "UPGRADE ARMOR", GAME_SETTINGS.shopCostArmor, () => this.buyItem('armor'));
-        addItem(5, "TOME OF SMITE", 100, () => this.buyItem('smite')); // New Spell
+        addItem(5, "TOME OF SMITE", 100, () => this.buyItem('smite')); 
 
         document.getElementById('shop-screen').classList.remove('hidden');
     }
@@ -522,17 +613,15 @@ class Game {
 
         if (success) {
             this.playerStats.gold -= cost;
-            this.openShop(); // Refresh UI
+            this.openShop(); 
             this.updateUI();
-        } else if (!success && type !== 'smite') { // Smite has logic inside
-             this.log("INSUFFICIENT CREDITS.", "text-phosphor-danger");
         }
     }
 
     toggleSpellbook() {
         if(this.overlayOpen) { this.closeOverlays(); return; }
         this.overlayOpen = true;
-        this.spellMenuKeyMap = {}; // Reset keys
+        this.spellMenuKeyMap = {}; 
         
         document.getElementById('spell-screen').classList.remove('hidden');
         document.getElementById('spell-mp').innerText = `${this.playerStats.mp}/${this.playerStats.maxMp}`;
@@ -553,10 +642,8 @@ class Game {
             div.className = `menu-item ${this.playerStats.mp < spell.cost ? 'disabled' : ''}`;
             div.innerHTML = `<span>[${keyIndex}]</span> <span class="text-magic">${spell.name} <span class="text-xs text-phosphor-dim">(${spell.desc})</span></span> <span>${spell.cost} MP</span>`;
             
-            // Map key
-            const currentIndex = keyIndex;
-            this.spellMenuKeyMap[currentIndex.toString()] = () => this.castSpell(spell);
-            
+            const idx = keyIndex;
+            this.spellMenuKeyMap[idx.toString()] = () => this.castSpell(spell);
             div.onclick = () => this.castSpell(spell);
             list.appendChild(div);
             keyIndex++;
@@ -575,9 +662,8 @@ class Game {
                 div.className = `menu-item`;
                 div.innerHTML = `<span>[${keyIndex}]</span> <span class="text-phosphor">${spell.name} <span class="text-xs text-phosphor-dim">(${spell.desc})</span></span> <span>x${count}</span>`;
                 
-                const currentIndex = keyIndex;
-                this.spellMenuKeyMap[currentIndex.toString()] = () => this.castSpell(spell);
-
+                const idx = keyIndex;
+                this.spellMenuKeyMap[idx.toString()] = () => this.castSpell(spell);
                 div.onclick = () => this.castSpell(spell);
                 list.appendChild(div);
                 keyIndex++;
@@ -586,7 +672,6 @@ class Game {
     }
 
     castSpell(spell) {
-        // Resource Check
         if (spell.type === 'spell') {
             if (this.playerStats.mp < spell.cost) {
                 this.log("INSUFFICIENT MANA.", "text-phosphor-danger");
@@ -594,7 +679,6 @@ class Game {
             }
             this.playerStats.mp -= spell.cost;
         } else {
-            // Scroll logic
             if (!this.playerStats.scrolls[spell.id] || this.playerStats.scrolls[spell.id] <= 0) return;
             this.playerStats.scrolls[spell.id]--;
         }
@@ -602,29 +686,27 @@ class Game {
         this.closeOverlays();
         this.log(`CASTING ${spell.name}...`, "text-magic");
 
-        // Spell Effects
         if (spell.id === 'heal') {
             this.playerStats.hp = Math.min(this.playerStats.maxHp, this.playerStats.hp + 8);
             this.showFloatText(this.player.x, this.player.y, "+8 HP", COLORS.MAGIC);
         } else if (spell.id === 'smite') {
-            // Damage all adjacent
             let hitCount = 0;
             this.entities.forEach(e => {
-                if (e.isEnemy && getDistance(this.player.x, this.player.y, e.x, e.y) < 2) {
+                if (e.isEnemy && getDistance(this.player.x, this.player.y, e.x, e.y) < 2.5) {
                     e.hp -= 6;
                     this.showFloatText(e.x, e.y, "-6", "#fff");
+                    this.log(`>> SMOTE ${e.name} FOR 6 DMG`, "text-phosphor-bright");
                     hitCount++;
                     if(e.hp <= 0) {
-                        this.log(`${e.name} SMITED.`, "text-phosphor-bright");
+                        this.log(`${e.name} DESTROYED.`, "text-phosphor-bright");
                         this.gainExp(Math.floor(e.exp * GAME_SETTINGS.xpMultiplier));
-                        e.dead = true; // Mark for cleanup
+                        e.dead = true;
                     }
                 }
             });
             this.entities = this.entities.filter(e => !e.dead);
             if(hitCount === 0) this.log("NO TARGETS IN RANGE.", "text-phosphor-dim");
         } else if (spell.id === 'fireball') {
-            // Damage nearest
             let nearest = null;
             let minDst = 999;
             this.entities.forEach(e => {
@@ -636,6 +718,7 @@ class Game {
             if (nearest) {
                 nearest.hp -= 15;
                 this.showFloatText(nearest.x, nearest.y, "BOOM!", COLORS.DANGER);
+                this.log(`>> FIREBALL HITS ${nearest.name}!`, "text-danger");
                 if(nearest.hp <= 0) {
                     this.log(`${nearest.name} INCINERATED.`, "text-phosphor-bright");
                     this.gainExp(Math.floor(nearest.exp * GAME_SETTINGS.xpMultiplier));
@@ -700,29 +783,39 @@ class Game {
                 return;
             }
 
-            // Magic Menu Shortcuts (Dynamic)
-            if(this.overlayOpen && document.getElementById('spell-screen').classList.contains('hidden') === false) {
-                const action = this.spellMenuKeyMap[e.key];
-                if (action) {
-                    action();
-                    return;
+            // Universal Space to close overlays
+            if(e.code === 'Space' && this.overlayOpen) {
+                // If it's confirmation screen, space means cancel/no
+                if(!document.getElementById('confirmation-screen').classList.contains('hidden')) {
+                    this.cancelExit();
+                } else if (!document.getElementById('level-intro-screen').classList.contains('hidden')) {
+                    this.closeLevelIntro();
+                } else {
+                    this.closeOverlays();
                 }
+                e.preventDefault();
+                return;
             }
 
-            // Shop Shortcuts
-            if(this.overlayOpen && document.getElementById('shop-screen').classList.contains('hidden') === false) {
-                if(e.key === '1') this.buyItem('potion');
-                if(e.key === '2') this.buyItem('scroll');
-                if(e.key === '3') this.buyItem('weapon');
-                if(e.key === '4') this.buyItem('armor');
-                if(e.key === '5') this.buyItem('smite');
+            // Shortcuts for Shop/Magic
+            if(this.overlayOpen) {
+                if(document.getElementById('spell-screen').classList.contains('hidden') === false) {
+                    const action = this.spellMenuKeyMap[e.key];
+                    if (action) action();
+                } else if(document.getElementById('shop-screen').classList.contains('hidden') === false) {
+                    if(e.key === '1') this.buyItem('potion');
+                    if(e.key === '2') this.buyItem('scroll');
+                    if(e.key === '3') this.buyItem('weapon');
+                    if(e.key === '4') this.buyItem('armor');
+                    if(e.key === '5') this.buyItem('smite');
+                }
             }
 
             if(e.key === 'm') { this.toggleSpellbook(); return; }
             if(e.key === '?' || e.key === '/') { this.toggleHelp(); return; }
             if(e.key === 'Escape') {
                 if(this.overlayOpen) this.closeOverlays();
-                else if(this.gameStarted && !this.isGameOver) this.exitGame();
+                else if(this.gameStarted && !this.isGameOver) this.askExit();
                 return;
             }
 
@@ -791,7 +884,6 @@ class Game {
         rooms.forEach((room, index) => { if (index !== 0) this.spawnContents(room); });
 
         this.updateFoW(); this.updateUI();
-        this.log(`DEPTH: ${this.depth} // SCAN COMPLETE`, 'text-phosphor');
         this.draw();
     }
 
@@ -902,11 +994,14 @@ class Game {
         document.getElementById('main-body').classList.add('damage-flash');
         setTimeout(() => document.getElementById('main-body').classList.remove('damage-flash'), 300);
 
+        this.log(">> TRAP SPRUNG! TOOK DAMAGE.", "text-warning");
+
         if (trap.trapType === 'spike') {
-            this.playerStats.hp -= 3;
-            this.log("SPIKE TRAP! -3 HP", "text-warning");
-            this.showFloatText(this.player.x, this.player.y, "TRAP! -3", COLORS.WARNING);
+            const dmg = randomInt(3, 5);
+            this.playerStats.hp -= dmg;
+            this.showFloatText(this.player.x, this.player.y, `SPIKES -${dmg}`, COLORS.WARNING);
         } else {
+            this.playerStats.hp -= 1; // Instant damage from poison trap too
             this.playerStats.status.poison = 50;
             this.log("POISON GAS! YOU ARE POISONED.", "text-phosphor-danger");
             this.showFloatText(this.player.x, this.player.y, "POISON TRAP!", COLORS.DANGER);
@@ -1028,13 +1123,11 @@ class Game {
     processTurn(isWaiting) {
         this.turn++; 
 
-        // Respawn Logic
         const enemyCount = this.entities.filter(e => e.isEnemy).length;
         if (enemyCount < GAME_SETTINGS.maxMonstersPerFloor && Math.random() < GAME_SETTINGS.monsterRespawnRate) {
             this.spawnWanderingMonster();
         }
 
-        // MP Regen
         this.mpRegenCounter++;
         if (this.mpRegenCounter >= GAME_SETTINGS.turnsToRegenMp) {
             if (this.playerStats.mp < this.playerStats.maxMp) {
@@ -1044,7 +1137,6 @@ class Game {
             this.mpRegenCounter = 0;
         }
 
-        // Status Effects
         if (this.playerStats.status.poison > 0) {
             this.playerStats.status.poison--;
             if (this.playerStats.status.poison % 5 === 0) {
@@ -1059,7 +1151,7 @@ class Game {
             this.freezeTimer--;
             this.updateUI();
             this.draw();
-            return; // Skip monster movement
+            return; 
         }
 
         this.updateFoW();
@@ -1104,16 +1196,38 @@ class Game {
         }
     }
 
-    nextLevel() { this.depth++; this.log(`DESCENDING...`, 'text-phosphor-bright'); this.initLevel(); }
+    nextLevel() { 
+        this.depth++; 
+        // Pause and show screen
+        this.initLevel(); 
+        this.showLevelIntro();
+    }
+    
     gameOver() { this.isGameOver = true; this.checkHighScore(); this.draw(); document.getElementById('game-over-screen').classList.remove('hidden'); document.getElementById('death-message').innerText = `SIGNAL LOST AT DEPTH ${this.depth}.`; }
     victory() { this.isGameOver = true; this.playerStats.amulets++; this.checkHighScore(); document.getElementById('victory-screen').classList.remove('hidden'); document.getElementById('final-score').innerText = `SCORE: ${this.playerStats.gold} | LEVEL: ${this.playerStats.level}`; }
     continueGame() { this.cycle++; this.currentAmuletGoal += GAME_SETTINGS.amuletDepth; document.getElementById('victory-screen').classList.add('hidden'); this.log(`CYCLE ${this.cycle}. THREAT UP.`, "text-phosphor-danger"); this.nextLevel(); this.isGameOver = false; }
     
-    restart() {
+    restart(fullReset = false) {
         this.playerStats = { hp: GAME_SETTINGS.startHp, maxHp: GAME_SETTINGS.startHp, mp: 10, maxMp: 10, atk: GAME_SETTINGS.startAtk, def: GAME_SETTINGS.startDef, level: 1, exp: 0, expToNext: 50, gold: 0, amulets: 0, knownSpells: ['heal'], scrolls: {}, status: { poison: 0 } };
         this.depth = 1; this.cycle = 1; this.currentAmuletGoal = GAME_SETTINGS.amuletDepth; this.isGameOver = false; this.player = null; 
-        document.getElementById('game-over-screen').classList.add('hidden'); document.getElementById('victory-screen').classList.add('hidden'); document.getElementById('summary-screen').classList.add('hidden');
-        this.logContainer.innerHTML = ''; this.log('REBOOTING...'); this.initLevel();
+        
+        // Safety Clean
+        const screens = ['game-over-screen', 'victory-screen', 'summary-screen', 'confirmation-screen', 'shop-screen', 'spell-screen', 'help-screen', 'level-intro-screen'];
+        screens.forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.classList.add('hidden');
+        });
+
+        this.logContainer.innerHTML = ''; 
+        
+        if (fullReset) {
+            this.gameStarted = false; // Immediately disable input
+            document.getElementById('splash-screen').classList.remove('hidden');
+        } else {
+            this.log('REBOOTING...');
+            this.initLevel();
+            this.showLevelIntro();
+        }
     }
 
     draw() {
