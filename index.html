@@ -285,7 +285,7 @@
                 <!-- Splash -->
                 <div id="splash-screen" class="absolute inset-0 bg-black z-40 flex flex-col items-center justify-center p-4 text-center overflow-y-auto" onclick="game.startGame()">
                     <h1 class="text-6xl md:text-8xl text-phosphor-bright font-bold mb-2 splash-title">ROGUE</h1>
-                    <p class="text-xl text-phosphor-dim mb-8">v2.7 - TERMINAL EDITION</p>
+                    <p class="text-xl text-phosphor-dim mb-8">v3.0 - ENDLESS CAMERA</p>
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl w-full mb-8 text-left border-2 border-phosphor p-6" onclick="event.stopPropagation()">
                         <div>
@@ -327,7 +327,7 @@
 
 <script>
 /**
- * CLASSROOM ROGUE: FINAL POLISH
+ * CLASSROOM ROGUE: CAMERA UPGRADE
  */
 
 const GAME_SETTINGS = {
@@ -340,14 +340,21 @@ const GAME_SETTINGS = {
     shopCostPotion: 20, shopCostWeapon: 50, shopCostArmor: 50, shopCostScroll: 30,
     trapSpawnChance: 0.4, 
     monsterRespawnRate: 0.05, 
-    maxMonstersPerFloor: 15,
+    maxMonstersPerFloor: 25, // Increased due to larger map
     mpPerLevel: 3, hpPerLevel: 5
 };
 
-const TILE_SIZE = 24;
-const MAP_WIDTH = 40;
-const MAP_HEIGHT = 25;
-const FONT_SIZE = 28;
+// --- New Constants for Camera/Viewport ---
+const TILE_SIZE = 32; // Larger, easier to see characters
+const FONT_SIZE = 36; // Larger font
+
+// Logical Map (The actual dungeon size) - Much larger now!
+const LEVEL_WIDTH = 60;
+const LEVEL_HEIGHT = 40;
+
+// Viewport (The screen window)
+const VIEW_WIDTH = 25;
+const VIEW_HEIGHT = 15;
 
 const COLORS = {
     WALL: '#1a801a', FLOOR: '#0a200a', FLOOR_VISIBLE: '#113311',
@@ -404,7 +411,6 @@ class Entity {
         this.atk = props.atk || 0; this.def = props.def || 0;
         this.exp = props.exp || 0;
         
-        // Critical Trap Fix: Ensure proper flags
         if (type === ENTITIES.TRAP) {
             this.isTrap = true;
             this.isItem = false; 
@@ -450,7 +456,10 @@ class Game {
         this.waitCounter = 0; this.mpRegenCounter = 0;
         this.cycle = 1; this.currentAmuletGoal = GAME_SETTINGS.amuletDepth;
         this.freezeTimer = 0; 
-        this.spellMenuKeyMap = {}; 
+        this.spellMenuKeyMap = {};
+        
+        // Camera Object
+        this.camera = { x: 0, y: 0 };
 
         this.playerStats = {
             hp: GAME_SETTINGS.startHp, maxHp: GAME_SETTINGS.startHp,
@@ -466,6 +475,17 @@ class Game {
         this.setupInput();
         
         this.gameStarted = false;
+    }
+
+    updateCamera() {
+        if (!this.player) return;
+        // Center on player
+        this.camera.x = this.player.x - Math.floor(VIEW_WIDTH / 2);
+        this.camera.y = this.player.y - Math.floor(VIEW_HEIGHT / 2);
+
+        // Clamp to level bounds
+        this.camera.x = Math.max(0, Math.min(this.camera.x, LEVEL_WIDTH - VIEW_WIDTH));
+        this.camera.y = Math.max(0, Math.min(this.camera.y, LEVEL_HEIGHT - VIEW_HEIGHT));
     }
 
     updateHighScoreDisplay() {
@@ -508,7 +528,6 @@ class Game {
         document.getElementById('level-intro-screen').classList.remove('hidden');
         document.getElementById('intro-title').innerText = `DEPTH ${this.depth}`;
         
-        // Calculate POTENTIAL monsters based on depth logic
         const potential = [];
         const relativeDepth = (this.depth - 1) % GAME_SETTINGS.amuletDepth;
         const maxIndex = MONSTERS.length - 1;
@@ -519,7 +538,6 @@ class Game {
             potential.push(MONSTERS[i].name);
         }
 
-        // Count actual traps
         let traps = 0;
         this.entities.forEach(e => { if(e.isTrap) traps++; });
 
@@ -630,7 +648,6 @@ class Game {
 
         let keyIndex = 1;
 
-        // Permanent Spells Section
         const title1 = document.createElement('div');
         title1.className = 'menu-section-title';
         title1.innerText = "GRIMOIRE (USE MP)";
@@ -649,7 +666,6 @@ class Game {
             keyIndex++;
         });
 
-        // Scrolls Section
         const title2 = document.createElement('div');
         title2.className = 'menu-section-title';
         title2.innerText = "SCROLLS (CONSUMABLE)";
@@ -736,11 +752,12 @@ class Game {
         } else if (spell.id === 'teleport') {
             let attempts = 0;
             while(attempts < 100) {
-                const rx = randomInt(1, MAP_WIDTH-2);
-                const ry = randomInt(1, MAP_HEIGHT-2);
+                const rx = randomInt(1, LEVEL_WIDTH-2);
+                const ry = randomInt(1, LEVEL_HEIGHT-2);
                 if (this.map[ry][rx] === '.' && !this.getEntityAt(rx, ry)) {
                     this.player.x = rx; this.player.y = ry;
                     this.log("WARP SUCCESSFUL.", "text-magic");
+                    this.updateCamera(); // Update cam immediately
                     break;
                 }
                 attempts++;
@@ -768,8 +785,10 @@ class Game {
     }
 
     resize() {
-        this.canvas.width = MAP_WIDTH * TILE_SIZE;
-        this.canvas.height = MAP_HEIGHT * TILE_SIZE;
+        // We set canvas internal resolution to View Width * Tile Size
+        this.canvas.width = VIEW_WIDTH * TILE_SIZE;
+        this.canvas.height = VIEW_HEIGHT * TILE_SIZE;
+        // CSS handles scaling to screen
         this.canvas.style.width = '100%';
         this.canvas.style.height = '100%';
         this.canvas.style.objectFit = 'contain';
@@ -783,9 +802,7 @@ class Game {
                 return;
             }
 
-            // Universal Space to close overlays
             if(e.code === 'Space' && this.overlayOpen) {
-                // If it's confirmation screen, space means cancel/no
                 if(!document.getElementById('confirmation-screen').classList.contains('hidden')) {
                     this.cancelExit();
                 } else if (!document.getElementById('level-intro-screen').classList.contains('hidden')) {
@@ -797,7 +814,6 @@ class Game {
                 return;
             }
 
-            // Shortcuts for Shop/Magic
             if(this.overlayOpen) {
                 if(document.getElementById('spell-screen').classList.contains('hidden') === false) {
                     const action = this.spellMenuKeyMap[e.key];
@@ -848,17 +864,18 @@ class Game {
 
     initLevel() {
         this.entities = []; this.map = []; this.visible = []; this.visited = [];
-        for (let y = 0; y < MAP_HEIGHT; y++) {
+        // Init Arrays based on LEVEL dimensions (60x40)
+        for (let y = 0; y < LEVEL_HEIGHT; y++) {
             this.map[y] = []; this.visible[y] = []; this.visited[y] = [];
-            for (let x = 0; x < MAP_WIDTH; x++) {
+            for (let x = 0; x < LEVEL_WIDTH; x++) {
                 this.map[y][x] = '#'; this.visible[y][x] = false; this.visited[y][x] = false;
             }
         }
 
-        const rooms = []; const maxRooms = 10;
+        const rooms = []; const maxRooms = 12; // Increase rooms for bigger map
         for (let i = 0; i < maxRooms; i++) {
-            const w = randomInt(4, 8); const h = randomInt(4, 8);
-            const x = randomInt(1, MAP_WIDTH - w - 1); const y = randomInt(1, MAP_HEIGHT - h - 1);
+            const w = randomInt(5, 10); const h = randomInt(5, 10);
+            const x = randomInt(1, LEVEL_WIDTH - w - 1); const y = randomInt(1, LEVEL_HEIGHT - h - 1);
             const newRoom = { x, y, w, h };
             let failed = false;
             for (let other of rooms) {
@@ -883,6 +900,7 @@ class Game {
 
         rooms.forEach((room, index) => { if (index !== 0) this.spawnContents(room); });
 
+        this.updateCamera(); // Initialize camera
         this.updateFoW(); this.updateUI();
         this.draw();
     }
@@ -917,8 +935,9 @@ class Game {
     spawnWanderingMonster() {
         let attempts = 0;
         while (attempts < 20) {
-            const rx = randomInt(1, MAP_WIDTH - 2);
-            const ry = randomInt(1, MAP_HEIGHT - 2);
+            const rx = randomInt(1, LEVEL_WIDTH - 2);
+            const ry = randomInt(1, LEVEL_HEIGHT - 2);
+            // Spawn logic uses level size
             if (this.map[ry][rx] === '.' && !this.getEntityAt(rx, ry) && !this.visible[ry][rx]) {
                  this.entities.push(this.createMonster(rx, ry));
                  this.log("HOSTILE SIGNAL DETECTED.", "text-warning");
@@ -968,6 +987,8 @@ class Game {
         const newX = this.player.x + dx;
         const newY = this.player.y + dy;
 
+        // Check map bounds first!
+        if (newX < 0 || newX >= LEVEL_WIDTH || newY < 0 || newY >= LEVEL_HEIGHT) return;
         if (this.map[newY][newX] === '#') return;
 
         const target = this.getEntityAt(newX, newY);
@@ -993,7 +1014,6 @@ class Game {
 
     triggerTrap(trap) {
         trap.visible = true;
-        // Trigger Red Flash
         document.getElementById('main-body').classList.add('damage-flash');
         setTimeout(() => document.getElementById('main-body').classList.remove('damage-flash'), 300);
 
@@ -1004,7 +1024,7 @@ class Game {
             this.playerStats.hp -= dmg;
             this.showFloatText(this.player.x, this.player.y, `SPIKES -${dmg}`, COLORS.WARNING);
         } else {
-            this.playerStats.hp -= 1; // Instant damage from poison trap too
+            this.playerStats.hp -= 1; 
             this.playerStats.status.poison = 50;
             this.log("POISON GAS! YOU ARE POISONED.", "text-phosphor-danger");
             this.showFloatText(this.player.x, this.player.y, "POISON TRAP!", COLORS.DANGER);
@@ -1015,7 +1035,7 @@ class Game {
 
     pickup(item) {
         if (item.name === 'Gold') {
-            const amount = randomInt(8, 20); // Increased gold drops slightly
+            const amount = randomInt(8, 20); 
             this.playerStats.gold += amount;
             this.log(`ACQUIRED ${amount} GOLD`, 'text-phosphor-bright');
             this.showFloatText(this.player.x, this.player.y, `+$${amount}`, '#ccffcc');
@@ -1097,7 +1117,7 @@ class Game {
             this.playerStats.exp -= this.playerStats.expToNext;
             this.playerStats.expToNext = Math.floor(this.playerStats.expToNext * 1.5);
             this.playerStats.maxHp += GAME_SETTINGS.hpPerLevel; 
-            this.playerStats.maxMp += GAME_SETTINGS.mpPerLevel; // MP Level Up
+            this.playerStats.maxMp += GAME_SETTINGS.mpPerLevel; 
             this.playerStats.hp = this.playerStats.maxHp;
             this.playerStats.mp = this.playerStats.maxMp;
             this.playerStats.atk++;
@@ -1125,6 +1145,9 @@ class Game {
 
     processTurn(isWaiting) {
         this.turn++; 
+        
+        // Update Camera to follow player every turn
+        this.updateCamera();
 
         const enemyCount = this.entities.filter(e => e.isEnemy).length;
         if (enemyCount < GAME_SETTINGS.maxMonstersPerFloor && Math.random() < GAME_SETTINGS.monsterRespawnRate) {
@@ -1193,7 +1216,7 @@ class Game {
 
     updateFoW() {
         const viewRadius = 7;
-        for (let y = 0; y < MAP_HEIGHT; y++) for (let x = 0; x < MAP_WIDTH; x++) {
+        for (let y = 0; y < LEVEL_HEIGHT; y++) for (let x = 0; x < LEVEL_WIDTH; x++) {
             this.visible[y][x] = false;
             if (getDistance(this.player.x, this.player.y, x, y) < viewRadius) { this.visible[y][x] = true; this.visited[y][x] = true; }
         }
@@ -1236,27 +1259,51 @@ class Game {
     draw() {
         this.ctx.fillStyle = COLORS.FLOOR; this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.font = `${FONT_SIZE}px 'VT323'`; this.ctx.textAlign = 'center'; this.ctx.textBaseline = 'middle';
-        const offsetX = 0; const offsetY = 0;
+        
+        // Render Viewport
+        for (let vy = 0; vy < VIEW_HEIGHT; vy++) {
+            for (let vx = 0; vx < VIEW_WIDTH; vx++) {
+                const mapX = this.camera.x + vx;
+                const mapY = this.camera.y + vy;
+                
+                // Screen Pixel Coords
+                const px = vx * TILE_SIZE + TILE_SIZE / 2;
+                const py = vy * TILE_SIZE + TILE_SIZE / 2;
 
-        for (let y = 0; y < MAP_HEIGHT; y++) for (let x = 0; x < MAP_WIDTH; x++) {
-            const px = x * TILE_SIZE + TILE_SIZE / 2 + offsetX; const py = y * TILE_SIZE + TILE_SIZE / 2 + offsetY;
-            if (this.visible[y][x]) {
-                if (this.map[y][x] === '#') { this.ctx.fillStyle = COLORS.WALL; this.ctx.fillText('#', px, py); }
-                else { this.ctx.fillStyle = COLORS.TEXT; this.ctx.globalAlpha = 0.2; this.ctx.fillText('.', px, py); this.ctx.globalAlpha = 1.0; }
-            } else if (this.visited[y][x]) { this.ctx.fillStyle = '#0f300f'; this.ctx.fillText(this.map[y][x], px, py); }
+                if (mapX >= 0 && mapX < LEVEL_WIDTH && mapY >= 0 && mapY < LEVEL_HEIGHT) {
+                    if (this.visible[mapY][mapX]) {
+                        if (this.map[mapY][mapX] === '#') { 
+                            this.ctx.fillStyle = COLORS.WALL; this.ctx.fillText('#', px, py); 
+                        } else { 
+                            this.ctx.fillStyle = COLORS.TEXT; this.ctx.globalAlpha = 0.2; this.ctx.fillText('.', px, py); this.ctx.globalAlpha = 1.0; 
+                        }
+                    } else if (this.visited[mapY][mapX]) { 
+                        this.ctx.fillStyle = '#0f300f'; this.ctx.fillText(this.map[mapY][mapX], px, py); 
+                    }
+                }
+            }
         }
 
+        // Draw Entities (relative to camera)
         this.entities.forEach(e => {
-            if (this.visible[e.y][e.x]) {
-                if (e.isTrap && !e.visible) return; // Don't draw hidden traps
-                const px = e.x * TILE_SIZE + TILE_SIZE / 2 + offsetX; const py = e.y * TILE_SIZE + TILE_SIZE / 2 + offsetY;
-                this.ctx.fillStyle = e.color || '#33ff33'; this.ctx.fillText(e.char, px, py);
+            // Check if entity is inside camera view
+            if (e.x >= this.camera.x && e.x < this.camera.x + VIEW_WIDTH &&
+                e.y >= this.camera.y && e.y < this.camera.y + VIEW_HEIGHT) {
+                
+                if (this.visible[e.y][e.x]) {
+                    if (e.isTrap && !e.visible) return; 
+                    const px = (e.x - this.camera.x) * TILE_SIZE + TILE_SIZE / 2;
+                    const py = (e.y - this.camera.y) * TILE_SIZE + TILE_SIZE / 2;
+                    this.ctx.fillStyle = e.color || '#33ff33'; this.ctx.fillText(e.char, px, py);
+                }
             }
         });
 
         if (this.player) {
-            const pPx = this.player.x * TILE_SIZE + TILE_SIZE / 2 + offsetX; const pPy = this.player.y * TILE_SIZE + TILE_SIZE / 2 + offsetY;
-            this.ctx.fillStyle = ENTITIES.PLAYER.color; this.ctx.fillText(ENTITIES.PLAYER.char, pPx, pPy);
+            // Player is always drawn if game is active
+            const px = (this.player.x - this.camera.x) * TILE_SIZE + TILE_SIZE / 2;
+            const py = (this.player.y - this.camera.y) * TILE_SIZE + TILE_SIZE / 2;
+            this.ctx.fillStyle = ENTITIES.PLAYER.color; this.ctx.fillText(ENTITIES.PLAYER.char, px, py);
         }
     }
 
@@ -1280,10 +1327,21 @@ class Game {
         statusLine.innerText = statusText;
     }
 
-    showFloatText(x, y, text, color) {
+    showFloatText(mapX, mapY, text, color) {
+        // Only show if visible on screen
+        if (mapX < this.camera.x || mapX >= this.camera.x + VIEW_WIDTH ||
+            mapY < this.camera.y || mapY >= this.camera.y + VIEW_HEIGHT) return;
+
         const container = document.getElementById('floating-text-container');
         const el = document.createElement('div');
-        const left = (x / MAP_WIDTH) * 100; const top = (y / MAP_HEIGHT) * 100;
+        
+        // Calculate relative position based on VIEWPORT not MAP
+        const relX = mapX - this.camera.x;
+        const relY = mapY - this.camera.y;
+        
+        const left = (relX / VIEW_WIDTH) * 100; 
+        const top = (relY / VIEW_HEIGHT) * 100;
+        
         el.style.left = `${left}%`; el.style.top = `${top}%`; el.style.color = color;
         el.className = 'absolute font-bold text-lg pointer-events-none transition-all duration-1000 transform -translate-y-4 opacity-0 font-vt323';
         el.style.textShadow = '0 0 2px black'; el.style.fontFamily = "'VT323', monospace"; el.innerText = text;
