@@ -285,7 +285,7 @@
                 <!-- Splash -->
                 <div id="splash-screen" class="absolute inset-0 bg-black z-40 flex flex-col items-center justify-center p-4 text-center overflow-y-auto" onclick="game.startGame()">
                     <h1 class="text-6xl md:text-8xl text-phosphor-bright font-bold mb-2 splash-title">ROGUE</h1>
-                    <p class="text-xl text-phosphor-dim mb-8">v3.0 - ENDLESS CAMERA</p>
+                    <p class="text-xl text-phosphor-dim mb-8">v2.8 - SEARCHING UPDATE</p>
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl w-full mb-8 text-left border-2 border-phosphor p-6" onclick="event.stopPropagation()">
                         <div>
@@ -298,7 +298,7 @@
                             <h3 class="text-phosphor-bright font-bold mb-2 text-2xl border-b border-phosphor inline-block">INPUTS</h3>
                             <ul class="text-phosphor text-xl space-y-1 splash-text">
                                 <li>[ARROWS] : Navigate / Engage</li>
-                                <li>[SPACE]  : Standby / Repair</li>
+                                <li>[SPACE]  : Standby / Search</li>
                                 <li>[M]      : Cast Spells</li>
                             </ul>
                         </div>
@@ -327,7 +327,7 @@
 
 <script>
 /**
- * CLASSROOM ROGUE: CAMERA UPGRADE
+ * CLASSROOM ROGUE: FINAL POLISH
  */
 
 const GAME_SETTINGS = {
@@ -340,19 +340,15 @@ const GAME_SETTINGS = {
     shopCostPotion: 20, shopCostWeapon: 50, shopCostArmor: 50, shopCostScroll: 30,
     trapSpawnChance: 0.4, 
     monsterRespawnRate: 0.05, 
-    maxMonstersPerFloor: 25, // Increased due to larger map
+    maxMonstersPerFloor: 15,
     mpPerLevel: 3, hpPerLevel: 5
 };
 
-// --- New Constants for Camera/Viewport ---
 const TILE_SIZE = 32; // Larger, easier to see characters
 const FONT_SIZE = 36; // Larger font
 
-// Logical Map (The actual dungeon size) - Much larger now!
 const LEVEL_WIDTH = 60;
 const LEVEL_HEIGHT = 40;
-
-// Viewport (The screen window)
 const VIEW_WIDTH = 25;
 const VIEW_HEIGHT = 15;
 
@@ -366,13 +362,13 @@ const ENTITIES = {
     PLAYER: { char: '@', color: '#ccffcc' },
     WALL: { char: '#', color: '#1a801a' },
     FLOOR: { char: '.', color: '#1a401a' },
-    STAIRS: { char: '>', name: 'Stairs', color: '#33ff33' },
+    STAIRS: { char: '⎆', name: 'Stairs', color: '#33ff33' },
     AMULET: { char: '&', name: 'Amulet', color: '#ccffcc' },
     GOLD: { char: '$', name: 'Gold', color: '#33ff33' },
-    POTION: { char: '!', name: 'Potion', color: '#33ff33' },
-    SWORD: { char: '/', name: 'Sword', color: '#33ff33' },
-    SHIELD: { char: '[', name: 'Shield', color: '#33ff33' },
-    SHOP: { char: 'M', name: 'Merchant', color: '#22d3ee' },
+    POTION: { char: '☤', name: 'Potion', color: '#33ff33' },
+    SWORD: { char: '⚔', name: 'Sword', color: '#33ff33' },
+    SHIELD: { char: '⛨', name: 'Shield', color: '#33ff33' },
+    SHOP: { char: '⛫', name: 'Merchant', color: '#22d3ee' },
     TRAP: { char: '^', name: 'Trap', color: '#eab308' },
     SCROLL: { char: '=', name: 'Scroll', color: '#a855f7' }
 };
@@ -390,13 +386,13 @@ const SPELLS = {
 const SCROLL_DROP_TABLE = ['fireball', 'reveal', 'teleport', 'freeze', 'cure'];
 
 const MONSTERS = [
-    { name: 'Rat', char: 'r', hp: 5, atk: 2, def: 0, exp: 5, color: '#33ff33', speed: 1.0, poison: true },
-    { name: 'Bat', char: 'b', hp: 6, atk: 3, def: 0, exp: 7, color: '#33ff33', speed: 1.2 },
-    { name: 'Kobold', char: 'k', hp: 8, atk: 2, def: 1, exp: 10, color: '#33ff33', speed: 1.0 },
-    { name: 'Snake', char: 's', hp: 10, atk: 3, def: 0, exp: 12, color: '#33ff33', speed: 1.0, poison: true },
-    { name: 'Goblin', char: 'g', hp: 12, atk: 4, def: 1, exp: 15, color: '#33ff33', speed: 0.8 },
-    { name: 'Orc', char: 'o', hp: 18, atk: 6, def: 2, exp: 25, color: '#33ff33', speed: 0.8 },
-    { name: 'Dragon', char: 'D', hp: 50, atk: 10, def: 4, exp: 100, color: '#ccffcc', speed: 1.0 }
+    { name: 'Rat', char: '⍤', hp: 5, atk: 2, def: 0, exp: 5, color: '#33ff33', speed: 1.0, poison: true },
+    { name: 'Bat', char: '⍢', hp: 6, atk: 3, def: 0, exp: 7, color: '#33ff33', speed: 1.2 },
+    { name: 'Kobold', char: '⍾', hp: 8, atk: 2, def: 1, exp: 10, color: '#33ff33', speed: 1.0 },
+    { name: 'Snake', char: '⺒', hp: 10, atk: 3, def: 0, exp: 12, color: '#33ff33', speed: 1.0, poison: true },
+    { name: 'Goblin', char: '☃', hp: 12, atk: 4, def: 1, exp: 15, color: '#33ff33', speed: 0.8 },
+    { name: 'Orc', char: '☿', hp: 18, atk: 6, def: 2, exp: 25, color: '#33ff33', speed: 0.8 },
+    { name: 'Dragon', char: '☠', hp: 50, atk: 10, def: 4, exp: 100, color: '#ccffcc', speed: 1.0 }
 ];
 
 function randomInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
@@ -417,6 +413,7 @@ class Entity {
             this.isEnemy = false;
             this.visible = false; 
             this.trapType = Math.random() < 0.3 ? 'poison' : 'spike';
+            this.flicker = false; // Add flicker property
         } else {
             this.isEnemy = !!props.hp; 
             this.isItem = !this.isEnemy;
@@ -454,11 +451,11 @@ class Game {
         this.depth = 1; this.turn = 0;
         this.isGameOver = false;
         this.waitCounter = 0; this.mpRegenCounter = 0;
+        this.consecutiveWaits = 0; // Track consecutive waits
         this.cycle = 1; this.currentAmuletGoal = GAME_SETTINGS.amuletDepth;
         this.freezeTimer = 0; 
         this.spellMenuKeyMap = {};
         
-        // Camera Object
         this.camera = { x: 0, y: 0 };
 
         this.playerStats = {
@@ -479,11 +476,8 @@ class Game {
 
     updateCamera() {
         if (!this.player) return;
-        // Center on player
         this.camera.x = this.player.x - Math.floor(VIEW_WIDTH / 2);
         this.camera.y = this.player.y - Math.floor(VIEW_HEIGHT / 2);
-
-        // Clamp to level bounds
         this.camera.x = Math.max(0, Math.min(this.camera.x, LEVEL_WIDTH - VIEW_WIDTH));
         this.camera.y = Math.max(0, Math.min(this.camera.y, LEVEL_HEIGHT - VIEW_HEIGHT));
     }
@@ -585,12 +579,14 @@ class Game {
 
     buyItem(type) {
         let cost = 0; let success = false;
+        let itemPurchased = "";
+
         if (type === 'potion') {
             cost = GAME_SETTINGS.shopCostPotion;
             if (this.playerStats.gold >= cost) {
                 const heal = GAME_SETTINGS.healPotionAmount;
                 this.playerStats.hp = Math.min(this.playerStats.maxHp, this.playerStats.hp + heal);
-                this.log(`POTION BOUGHT.`, "text-phosphor");
+                itemPurchased = "POTION";
                 success = true;
             }
         } else if (type === 'scroll') {
@@ -599,21 +595,21 @@ class Game {
                 const scrollId = SCROLL_DROP_TABLE[randomInt(0, SCROLL_DROP_TABLE.length - 1)];
                 const sName = SPELLS[scrollId.toUpperCase()].name;
                 this.playerStats.scrolls[scrollId] = (this.playerStats.scrolls[scrollId] || 0) + 1;
-                this.log(`BOUGHT SCROLL: ${sName}`, "text-magic");
+                itemPurchased = `SCROLL (${sName})`;
                 success = true;
             }
         } else if (type === 'weapon') {
             cost = GAME_SETTINGS.shopCostWeapon;
             if (this.playerStats.gold >= cost) {
                 this.playerStats.atk++;
-                this.log(`WEAPON UPGRADED.`, "text-phosphor");
+                itemPurchased = "WEAPON UPGRADE";
                 success = true;
             }
         } else if (type === 'armor') {
             cost = GAME_SETTINGS.shopCostArmor;
             if (this.playerStats.gold >= cost) {
                 this.playerStats.def++;
-                this.log(`ARMOR UPGRADED.`, "text-phosphor");
+                itemPurchased = "ARMOR UPGRADE";
                 success = true;
             }
         } else if (type === 'smite') {
@@ -621,7 +617,7 @@ class Game {
             if (this.playerStats.gold >= cost) {
                 if (!this.playerStats.knownSpells.includes('smite')) {
                     this.playerStats.knownSpells.push('smite');
-                    this.log(`LEARNED: SMITE!`, "text-magic");
+                    itemPurchased = "SPELL: SMITE";
                     success = true;
                 } else {
                     this.log(`ALREADY KNOWN.`, "text-phosphor-danger");
@@ -631,6 +627,7 @@ class Game {
 
         if (success) {
             this.playerStats.gold -= cost;
+            this.log(`PURCHASED: ${itemPurchased}`, "text-phosphor-bright");
             this.openShop(); 
             this.updateUI();
         }
@@ -757,7 +754,7 @@ class Game {
                 if (this.map[ry][rx] === '.' && !this.getEntityAt(rx, ry)) {
                     this.player.x = rx; this.player.y = ry;
                     this.log("WARP SUCCESSFUL.", "text-magic");
-                    this.updateCamera(); // Update cam immediately
+                    this.updateCamera(); 
                     break;
                 }
                 attempts++;
@@ -785,10 +782,8 @@ class Game {
     }
 
     resize() {
-        // We set canvas internal resolution to View Width * Tile Size
         this.canvas.width = VIEW_WIDTH * TILE_SIZE;
         this.canvas.height = VIEW_HEIGHT * TILE_SIZE;
-        // CSS handles scaling to screen
         this.canvas.style.width = '100%';
         this.canvas.style.height = '100%';
         this.canvas.style.objectFit = 'contain';
@@ -864,7 +859,6 @@ class Game {
 
     initLevel() {
         this.entities = []; this.map = []; this.visible = []; this.visited = [];
-        // Init Arrays based on LEVEL dimensions (60x40)
         for (let y = 0; y < LEVEL_HEIGHT; y++) {
             this.map[y] = []; this.visible[y] = []; this.visited[y] = [];
             for (let x = 0; x < LEVEL_WIDTH; x++) {
@@ -872,7 +866,7 @@ class Game {
             }
         }
 
-        const rooms = []; const maxRooms = 12; // Increase rooms for bigger map
+        const rooms = []; const maxRooms = 12; 
         for (let i = 0; i < maxRooms; i++) {
             const w = randomInt(5, 10); const h = randomInt(5, 10);
             const x = randomInt(1, LEVEL_WIDTH - w - 1); const y = randomInt(1, LEVEL_HEIGHT - h - 1);
@@ -900,7 +894,7 @@ class Game {
 
         rooms.forEach((room, index) => { if (index !== 0) this.spawnContents(room); });
 
-        this.updateCamera(); // Initialize camera
+        this.updateCamera(); 
         this.updateFoW(); this.updateUI();
         this.draw();
     }
@@ -915,7 +909,6 @@ class Game {
     hCorridor(x1, x2, y) { for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) this.map[y][x] = '.'; }
     vCorridor(y1, y2, x) { for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) this.map[y][x] = '.'; }
 
-    // Unified Monster Creation
     createMonster(x, y) {
         const relativeDepth = (this.depth - 1) % GAME_SETTINGS.amuletDepth;
         const maxIndex = MONSTERS.length - 1;
@@ -937,7 +930,6 @@ class Game {
         while (attempts < 20) {
             const rx = randomInt(1, LEVEL_WIDTH - 2);
             const ry = randomInt(1, LEVEL_HEIGHT - 2);
-            // Spawn logic uses level size
             if (this.map[ry][rx] === '.' && !this.getEntityAt(rx, ry) && !this.visible[ry][rx]) {
                  this.entities.push(this.createMonster(rx, ry));
                  this.log("HOSTILE SIGNAL DETECTED.", "text-warning");
@@ -948,7 +940,6 @@ class Game {
     }
 
     spawnContents(room) {
-        // Monster
         if (Math.random() < 0.7) {
             const x = randomInt(room.x, room.x + room.w - 1);
             const y = randomInt(room.y, room.y + room.h - 1);
@@ -956,20 +947,29 @@ class Game {
                 this.entities.push(this.createMonster(x, y));
             }
         }
-        // Shop
+        
+        // Shop - Updated to spawn away from edges
         if (Math.random() < 0.1) {
-             const x = randomInt(room.x, room.x + room.w - 1); const y = randomInt(room.y, room.y + room.h - 1);
-             if (!this.getEntityAt(x, y) && (x !== this.player.x || y !== this.player.y)) { this.entities.push(new Entity(x, y, ENTITIES.SHOP)); return; }
-        }
-        // Trap (Configurable Chance) - Loop to increase density as requested
-        const trapsInRoom = randomInt(0, 2); // 0 to 2 traps per room
-        for(let i=0; i<trapsInRoom; i++) {
-             const x = randomInt(room.x, room.x + room.w - 1); const y = randomInt(room.y, room.y + room.h - 1);
-             if (!this.getEntityAt(x, y) && (x !== this.player.x || y !== this.player.y)) { 
-                 this.entities.push(new Entity(x, y, ENTITIES.TRAP)); 
+             const pad = 1;
+             const minX = room.x + pad;
+             const maxX = room.x + room.w - 1 - pad;
+             const minY = room.y + pad;
+             const maxY = room.y + room.h - 1 - pad;
+             
+             if (maxX > minX && maxY > minY) {
+                 const x = randomInt(minX, maxX);
+                 const y = randomInt(minY, maxY);
+                 if (!this.getEntityAt(x, y) && (x !== this.player.x || y !== this.player.y)) { 
+                     this.entities.push(new Entity(x, y, ENTITIES.SHOP)); 
+                     return; 
+                 }
              }
         }
-        // Items
+        
+        if (Math.random() < GAME_SETTINGS.trapSpawnChance) {
+             const x = randomInt(room.x, room.x + room.w - 1); const y = randomInt(room.y, room.y + room.h - 1);
+             if (!this.getEntityAt(x, y) && (x !== this.player.x || y !== this.player.y)) { this.entities.push(new Entity(x, y, ENTITIES.TRAP)); }
+        }
         if (Math.random() < 0.5) {
             const x = randomInt(room.x, room.x + room.w - 1); const y = randomInt(room.y, room.y + room.h - 1);
             if (!this.getEntityAt(x, y)) {
@@ -983,11 +983,10 @@ class Game {
     getEntityAt(x, y) { return this.entities.find(e => e.x === x && e.y === y); }
 
     movePlayer(dx, dy) {
-        this.waitCounter = 0;
+        this.consecutiveWaits = 0; // Reset search on movement
         const newX = this.player.x + dx;
         const newY = this.player.y + dy;
 
-        // Check map bounds first!
         if (newX < 0 || newX >= LEVEL_WIDTH || newY < 0 || newY >= LEVEL_HEIGHT) return;
         if (this.map[newY][newX] === '#') return;
 
@@ -1000,7 +999,7 @@ class Game {
                 else if (target.name === 'Merchant') { this.openShop(); return; }
                 else { this.pickup(target); this.entities = this.entities.filter(e => e !== target); }
             } else if (target.isTrap) {
-                this.player.x = newX; this.player.y = newY; // Move onto trap
+                this.player.x = newX; this.player.y = newY; 
                 this.triggerTrap(target);
                 this.processTurn(false);
                 return;
@@ -1075,7 +1074,6 @@ class Game {
                 this.log(`${defender.name} TERMINATED.`, 'text-phosphor-bright');
                 this.gainExp(Math.floor(defender.exp * GAME_SETTINGS.xpMultiplier));
                 
-                // Loot
                 if (Math.random() < 0.5) {
                     const goldAmount = randomInt(2, 5) * (this.cycle || 1); 
                     this.entities.push(new Entity(defender.x, defender.y, ENTITIES.GOLD));
@@ -1128,25 +1126,56 @@ class Game {
 
     wait() {
         if(!this.isGameOver) {
-            this.waitCounter++;
-            if (this.waitCounter >= GAME_SETTINGS.turnsToHeal) {
-                if (this.playerStats.hp < this.playerStats.maxHp) {
-                    this.playerStats.hp++;
-                    this.log("REPAIRING...", 'text-phosphor');
-                    this.showFloatText(this.player.x, this.player.y, `+1HP`, '#33ff33');
-                }
-                this.waitCounter = 0;
+            this.consecutiveWaits++;
+            
+            if (this.consecutiveWaits >= 2) {
+                this.log("SEARCHING SURROUNDINGS...", "text-phosphor-bright");
+                this.searchForTraps();
+                this.consecutiveWaits = 0; 
             } else {
-                this.log(`STANDBY...`);
+                if (this.waitCounter >= GAME_SETTINGS.turnsToHeal) {
+                    if (this.playerStats.hp < this.playerStats.maxHp) {
+                        this.playerStats.hp++;
+                        this.log("REPAIRING...", 'text-phosphor');
+                        this.showFloatText(this.player.x, this.player.y, `+1HP`, '#33ff33');
+                    }
+                    this.waitCounter = 0;
+                } else {
+                    this.log(`STANDBY...`);
+                }
             }
+            this.waitCounter++; 
             this.processTurn(true);
+        }
+    }
+
+    searchForTraps() {
+        let found = false;
+        this.entities.forEach(e => {
+            if (e.isTrap && !e.visible) {
+                // Check distance (within 5 tiles)
+                if (getDistance(this.player.x, this.player.y, e.x, e.y) <= 5) {
+                    e.flicker = true;
+                    found = true;
+                }
+            }
+        });
+
+        if (found) {
+            this.draw(); 
+            setTimeout(() => {
+                this.entities.forEach(e => e.flicker = false);
+                this.draw(); 
+            }, 800); 
+            this.log("WARNING: ANOMALY DETECTED.", "text-warning");
+        } else {
+            this.log("SCAN CLEAR.", "text-phosphor-dim");
         }
     }
 
     processTurn(isWaiting) {
         this.turn++; 
         
-        // Update Camera to follow player every turn
         this.updateCamera();
 
         const enemyCount = this.entities.filter(e => e.isEnemy).length;
@@ -1182,7 +1211,7 @@ class Game {
 
         this.updateFoW();
         let aggroRange = isWaiting ? 20 : 8;
-        if (isWaiting) this.showFloatText(this.player.x, this.player.y, "...", "#33ff33");
+        if (isWaiting && this.consecutiveWaits < 2) this.showFloatText(this.player.x, this.player.y, "...", "#33ff33");
         
         this.entities.forEach(entity => {
             if (entity.isEnemy) {
@@ -1291,7 +1320,7 @@ class Game {
                 e.y >= this.camera.y && e.y < this.camera.y + VIEW_HEIGHT) {
                 
                 if (this.visible[e.y][e.x]) {
-                    if (e.isTrap && !e.visible) return; 
+                    if (e.isTrap && !e.visible && !e.flicker) return; 
                     const px = (e.x - this.camera.x) * TILE_SIZE + TILE_SIZE / 2;
                     const py = (e.y - this.camera.y) * TILE_SIZE + TILE_SIZE / 2;
                     this.ctx.fillStyle = e.color || '#33ff33'; this.ctx.fillText(e.char, px, py);
