@@ -285,7 +285,7 @@
                 <!-- Splash -->
                 <div id="splash-screen" class="absolute inset-0 bg-black z-40 flex flex-col items-center justify-center p-4 text-center overflow-y-auto" onclick="game.startGame()">
                     <h1 class="text-6xl md:text-8xl text-phosphor-bright font-bold mb-2 splash-title">ROGUE</h1>
-                    <p class="text-xl text-phosphor-dim mb-8">v2.8 - SEARCHING UPDATE</p>
+                    <p class="text-xl text-phosphor-dim mb-8">v2.9 - DYNAMIC THREATS</p>
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl w-full mb-8 text-left border-2 border-phosphor p-6" onclick="event.stopPropagation()">
                         <div>
@@ -341,7 +341,8 @@ const GAME_SETTINGS = {
     trapSpawnChance: 0.4, 
     monsterRespawnRate: 0.05, 
     maxMonstersPerFloor: 15,
-    mpPerLevel: 3, hpPerLevel: 5
+    mpPerLevel: 3, hpPerLevel: 5,
+    dynamicDifficulty: true // Scale monsters with player stats
 };
 
 const TILE_SIZE = 32; // Larger, easier to see characters
@@ -358,17 +359,20 @@ const COLORS = {
     MAGIC: '#a855f7', WARNING: '#eab308'
 };
 
+// Shades of green for wall variety
+const WALL_SHADES = ['#14532d', '#166534', '#15803d', '#1a801a'];
+
 const ENTITIES = {
     PLAYER: { char: '@', color: '#ccffcc' },
     WALL: { char: '#', color: '#1a801a' },
     FLOOR: { char: '.', color: '#1a401a' },
-    STAIRS: { char: '⎆', name: 'Stairs', color: '#33ff33' },
+    STAIRS: { char: '>', name: 'Stairs', color: '#33ff33' },
     AMULET: { char: '&', name: 'Amulet', color: '#ccffcc' },
     GOLD: { char: '$', name: 'Gold', color: '#33ff33' },
-    POTION: { char: '☤', name: 'Potion', color: '#33ff33' },
-    SWORD: { char: '⚔', name: 'Sword', color: '#33ff33' },
-    SHIELD: { char: '⛨', name: 'Shield', color: '#33ff33' },
-    SHOP: { char: '⛫', name: 'Merchant', color: '#22d3ee' },
+    POTION: { char: '!', name: 'Potion', color: '#33ff33' },
+    SWORD: { char: '/', name: 'Sword', color: '#33ff33' },
+    SHIELD: { char: '[', name: 'Shield', color: '#33ff33' },
+    SHOP: { char: 'M', name: 'Merchant', color: '#22d3ee' },
     TRAP: { char: '^', name: 'Trap', color: '#eab308' },
     SCROLL: { char: '=', name: 'Scroll', color: '#a855f7' }
 };
@@ -386,13 +390,13 @@ const SPELLS = {
 const SCROLL_DROP_TABLE = ['fireball', 'reveal', 'teleport', 'freeze', 'cure'];
 
 const MONSTERS = [
-    { name: 'Rat', char: '⍤', hp: 5, atk: 2, def: 0, exp: 5, color: '#33ff33', speed: 1.0, poison: true },
-    { name: 'Bat', char: '⍢', hp: 6, atk: 3, def: 0, exp: 7, color: '#33ff33', speed: 1.2 },
-    { name: 'Kobold', char: '⍾', hp: 8, atk: 2, def: 1, exp: 10, color: '#33ff33', speed: 1.0 },
-    { name: 'Snake', char: '⺒', hp: 10, atk: 3, def: 0, exp: 12, color: '#33ff33', speed: 1.0, poison: true },
-    { name: 'Goblin', char: '☃', hp: 12, atk: 4, def: 1, exp: 15, color: '#33ff33', speed: 0.8 },
-    { name: 'Orc', char: '☿', hp: 18, atk: 6, def: 2, exp: 25, color: '#33ff33', speed: 0.8 },
-    { name: 'Dragon', char: '☠', hp: 50, atk: 10, def: 4, exp: 100, color: '#ccffcc', speed: 1.0 }
+    { name: 'Rat', char: 'r', hp: 5, atk: 2, def: 0, exp: 5, color: '#33ff33', speed: 1.0, poison: true },
+    { name: 'Bat', char: 'b', hp: 6, atk: 3, def: 0, exp: 7, color: '#33ff33', speed: 1.2 },
+    { name: 'Kobold', char: 'k', hp: 8, atk: 2, def: 1, exp: 10, color: '#33ff33', speed: 1.0 },
+    { name: 'Snake', char: 's', hp: 10, atk: 3, def: 0, exp: 12, color: '#33ff33', speed: 1.0, poison: true },
+    { name: 'Goblin', char: 'g', hp: 12, atk: 4, def: 1, exp: 15, color: '#33ff33', speed: 0.8 },
+    { name: 'Orc', char: 'o', hp: 18, atk: 6, def: 2, exp: 25, color: '#33ff33', speed: 0.8 },
+    { name: 'Dragon', char: 'D', hp: 50, atk: 10, def: 4, exp: 100, color: '#ccffcc', speed: 1.0 }
 ];
 
 function randomInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
@@ -413,7 +417,7 @@ class Entity {
             this.isEnemy = false;
             this.visible = false; 
             this.trapType = Math.random() < 0.3 ? 'poison' : 'spike';
-            this.flicker = false; // Add flicker property
+            this.flicker = false; 
         } else {
             this.isEnemy = !!props.hp; 
             this.isItem = !this.isEnemy;
@@ -446,12 +450,14 @@ class Game {
 
         this.gameStarted = false;
         this.overlayOpen = false;
-        this.map = []; this.visible = []; this.visited = [];
+        this.map = []; 
+        this.mapColors = []; // Store colors for walls
+        this.visible = []; this.visited = [];
         this.entities = []; this.player = null;
         this.depth = 1; this.turn = 0;
         this.isGameOver = false;
         this.waitCounter = 0; this.mpRegenCounter = 0;
-        this.consecutiveWaits = 0; // Track consecutive waits
+        this.consecutiveWaits = 0; 
         this.cycle = 1; this.currentAmuletGoal = GAME_SETTINGS.amuletDepth;
         this.freezeTimer = 0; 
         this.spellMenuKeyMap = {};
@@ -858,11 +864,13 @@ class Game {
     }
 
     initLevel() {
-        this.entities = []; this.map = []; this.visible = []; this.visited = [];
+        this.entities = []; this.map = []; this.mapColors = []; this.visible = []; this.visited = [];
         for (let y = 0; y < LEVEL_HEIGHT; y++) {
-            this.map[y] = []; this.visible[y] = []; this.visited[y] = [];
+            this.map[y] = []; this.mapColors[y] = []; this.visible[y] = []; this.visited[y] = [];
             for (let x = 0; x < LEVEL_WIDTH; x++) {
-                this.map[y][x] = '#'; this.visible[y][x] = false; this.visited[y][x] = false;
+                this.map[y][x] = '#'; 
+                this.mapColors[y][x] = WALL_SHADES[randomInt(0, WALL_SHADES.length - 1)]; // Assign random green shade
+                this.visible[y][x] = false; this.visited[y][x] = false;
             }
         }
 
@@ -914,14 +922,31 @@ class Game {
         const maxIndex = MONSTERS.length - 1;
         const difficulty = Math.min(maxIndex, Math.floor(Math.random() * (Math.ceil((relativeDepth / (GAME_SETTINGS.amuletDepth - 1)) * maxIndex) + 1)));
         const monsterType = MONSTERS[difficulty];
-        const statMultiplier = 1 + (this.cycle - 1) * 0.5;
+        
+        // Base Cycle Multiplier (New Game+)
+        let statMultiplier = 1 + (this.cycle - 1) * 0.5;
+        let atkBonus = (this.cycle - 1);
+
+        // Dynamic Difficulty Scaling
+        if (GAME_SETTINGS.dynamicDifficulty) {
+            // Heuristic: Power = Level + (Atk/2) + (Def/2)
+            // Example: Lvl 1, Atk 3, Def 0 = 2.5
+            // Example: Lvl 5, Atk 10, Def 5 = 12.5
+            const playerPower = this.playerStats.level + (this.playerStats.atk / 2) + (this.playerStats.def / 2);
+            
+            // Scaling factor: Increases slightly based on how strong the player is relative to starting stats
+            const scalingFactor = 1 + (playerPower * 0.1); 
+            
+            statMultiplier *= scalingFactor;
+            atkBonus += Math.floor(playerPower * 0.2); // Small attack boost for strong players
+        }
         
         return new Entity(x, y, { char: monsterType.char, color: monsterType.color }, { 
             ...monsterType, 
             hp: Math.floor(monsterType.hp * statMultiplier), 
             maxHp: Math.floor(monsterType.hp * statMultiplier), 
             exp: Math.floor(monsterType.exp * statMultiplier), 
-            atk: monsterType.atk + (this.cycle - 1) 
+            atk: monsterType.atk + atkBonus 
         });
     }
 
@@ -948,7 +973,6 @@ class Game {
             }
         }
         
-        // Shop - Updated to spawn away from edges
         if (Math.random() < 0.1) {
              const pad = 1;
              const minX = room.x + pad;
@@ -1153,7 +1177,6 @@ class Game {
         let found = false;
         this.entities.forEach(e => {
             if (e.isTrap && !e.visible) {
-                // Check distance (within 5 tiles)
                 if (getDistance(this.player.x, this.player.y, e.x, e.y) <= 5) {
                     e.flicker = true;
                     found = true;
@@ -1302,7 +1325,7 @@ class Game {
                 if (mapX >= 0 && mapX < LEVEL_WIDTH && mapY >= 0 && mapY < LEVEL_HEIGHT) {
                     if (this.visible[mapY][mapX]) {
                         if (this.map[mapY][mapX] === '#') { 
-                            this.ctx.fillStyle = COLORS.WALL; this.ctx.fillText('#', px, py); 
+                            this.ctx.fillStyle = this.mapColors[mapY][mapX]; this.ctx.fillText('#', px, py); 
                         } else { 
                             this.ctx.fillStyle = COLORS.TEXT; this.ctx.globalAlpha = 0.2; this.ctx.fillText('.', px, py); this.ctx.globalAlpha = 1.0; 
                         }
