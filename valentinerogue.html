@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Valentine's Dungeon</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Varela+Round&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #fff0f3; /* Very Light Rose */
+            --fog-color: #fce7f3; /* Unexplored areas */
+            --fog-dim: #fbcfe8;   /* Explored but not visible */
+            --wall-front: #db2777; /* Pink 600 */
+            --wall-top: #be185d;   /* Pink 700 */
+            --floor: #ffffff;
+        }
+
+        body {
+            font-family: 'Varela Round', sans-serif;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(#fda4af 1px, transparent 1px);
+            background-size: 20px 20px;
+            color: #831843;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Game Container */
+        .game-card {
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            border: 4px solid #f9a8d4;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* The Grid */
+        .game-grid {
+            display: grid;
+            grid-template-columns: repeat(var(--cols), 1fr);
+            background-color: var(--floor); 
+        }
+        
+        .cell {
+            width: 100%;
+            aspect-ratio: 1/1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(16px, 3vw, 28px);
+            position: relative;
+            transition: background-color 0.2s;
+        }
+
+        /* Visual Styles for Tiles */
+        .tile-wall {
+            background-color: var(--wall-front);
+            border-bottom: 4px solid var(--wall-top);
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        
+        .tile-floor {
+            background-color: var(--floor);
+            border: 1px solid #fdf2f8; /* subtle grid */
+        }
+
+        .tile-fog {
+            background-color: var(--bg-color);
+            opacity: 0.1; /* Almost invisible */
+        }
+        
+        .tile-dim {
+            background-color: #fdf2f8; /* Pale pink */
+            filter: grayscale(80%) opacity(0.5);
+        }
+
+        /* Animations */
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15%); }
+        }
+        .player-anim { animation: bounce 0.6s infinite ease-in-out; z-index: 20; filter: drop-shadow(0 4px 2px rgba(0,0,0,0.1)); }
+
+        @keyframes pulse-heart {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+            100% { transform: scale(1); }
+        }
+        .goal-anim { animation: pulse-heart 1.2s infinite ease-in-out; z-index: 10; }
+
+        @keyframes float-up {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-40px) scale(1.2); opacity: 0; }
+        }
+        .float-text { animation: float-up 1s forwards; position: absolute; font-weight: bold; pointer-events: none; z-index: 30; text-shadow: 2px 2px 0px #fff; }
+
+        @keyframes float-idle {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(0, -3px); }
+        }
+        .monster-anim { animation: float-idle 2s infinite ease-in-out; }
+
+        /* Controls */
+        .control-btn {
+            background: white;
+            border: 2px solid #ec4899;
+            color: #ec4899;
+            border-radius: 12px;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 0 #db2777;
+            transition: all 0.1s;
+        }
+        .control-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #db2777;
+        }
+        
+        /* Shake effect for bad things */
+        .shake {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col items-center justify-center">
+
+    <!-- Header -->
+    <div class="w-full max-w-2xl flex justify-between items-end mb-2 px-4 z-10">
+        <div class="bg-white px-4 py-2 rounded-xl border-2 border-pink-200 shadow-sm">
+            <div class="text-xs text-pink-400 font-bold uppercase tracking-wider">Level</div>
+            <div id="level-display" class="font-['Fredoka_One'] text-2xl text-pink-600 leading-none">1</div>
+        </div>
+        
+        <h1 class="font-['Fredoka_One'] text-3xl md:text-4xl text-pink-500 drop-shadow-sm pb-1">Love Dungeon</h1>
+
+        <div class="bg-white px-4 py-2 rounded-xl border-2 border-pink-200 shadow-sm text-right">
+            <div class="text-xs text-pink-400 font-bold uppercase tracking-wider">Love Score</div>
+            <div id="score-display" class="font-['Fredoka_One'] text-2xl text-pink-600 leading-none">0</div>
+        </div>
+    </div>
+
+    <!-- Game View -->
+    <div id="game-container" class="game-card w-full max-w-2xl aspect-square md:aspect-[4/3] max-h-[70vh]">
+        <!-- Grid -->
+        <div id="grid-container" class="w-full h-full relative bg-pink-50">
+            <div id="game-grid" class="game-grid w-full h-full"></div>
+            <div id="floating-text-container" class="absolute inset-0 pointer-events-none overflow-hidden"></div>
+            
+            <!-- Transition Overlay -->
+            <div id="level-overlay" class="hidden absolute inset-0 bg-white/90 z-50 flex flex-col items-center justify-center transition-opacity duration-500">
+                <div class="text-6xl mb-4 animate-bounce">💝</div>
+                <h2 class="font-['Fredoka_One'] text-4xl text-pink-500 mb-2">Level Complete!</h2>
+                <p class="text-pink-400 font-bold">Getting harder...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="mt-4 w-full max-w-md flex flex-col items-center gap-2">
+        <p class="text-pink-400 text-sm font-bold md:block hidden animate-pulse">
+            Use Arrow Keys to Explore • Avoid the 🌧️!
+        </p>
+
+        <!-- D-Pad for Touch -->
+        <div class="grid grid-cols-3 gap-2 w-48 md:hidden">
+            <div></div>
+            <button class="control-btn h-14 flex items-center justify-center" onclick="handleInput(0, -1)">⬆️</button>
+            <div></div>
+            <button class="control-btn h-14 flex items-center justify-center" onclick="handleInput(-1, 0)">⬅️</button>
+            <div class="flex items-center justify-center text-3xl">🧸</div>
+            <button class="control-btn h-14 flex items-center justify-center" onclick="handleInput(1, 0)">➡️</button>
+            <div></div>
+            <button class="control-btn h-14 flex items-center justify-center" onclick="handleInput(0, 1)">⬇️</button>
+            <div></div>
+        </div>
+    </div>
+
+<script>
+    /* --- CONFIG --- */
+    const VIEW_WIDTH = 13;  // Viewport size (cells)
+    const VIEW_HEIGHT = 11;
+    const MAP_SIZE = 40;    // Dungeon size
+    
+    // Assets
+    const EMOJIS = {
+        PLAYER: '🧸',
+        GOAL: '💝',
+        WALL: '',
+        FLOOR: '',
+        FOG: '☁️'
+    };
+    
+    const TREATS = [
+        { icon: '🍬', val: 10 }, { icon: '🍭', val: 15 }, 
+        { icon: '🧁', val: 20 }, { icon: '🍫', val: 25 }, 
+        { icon: '🍓', val: 30 }, { icon: '💌', val: 50 },
+        { icon: '🌹', val: 100 }
+    ];
+
+    const MONSTERS = [
+        { icon: '🌧️', val: -50, name: 'Rain Cloud' },
+        { icon: '💔', val: -30, name: 'Broken Heart' }
+    ];
+
+    /* --- STATE --- */
+    let gameState = {
+        map: [],      // 1=Wall, 0=Floor
+        seen: [],     // Boolean: has player seen this tile ever?
+        visible: [],  // Boolean: can player see this tile NOW?
+        entities: [], // Objects {x, y, type, icon, ...}
+        player: { x: 1, y: 1 },
+        level: 1,
+        score: 0,
+        camera: { x: 0, y: 0 },
+        inputLocked: false
+    };
+
+    /* --- INIT --- */
+    window.onload = () => {
+        startLevel();
+    };
+
+    function startLevel() {
+        gameState.inputLocked = false;
+        document.getElementById('level-overlay').classList.add('hidden');
+        
+        generateDungeon();
+        updateFOV();
+        centerCamera();
+        render();
+        updateUI();
+    }
+
+    /* --- GENERATION: ROOMS & CORRIDORS --- */
+    function generateDungeon() {
+        // Reset Arrays
+        gameState.map = [];
+        gameState.seen = [];
+        gameState.visible = [];
+        gameState.entities = [];
+
+        // Fill with Walls
+        for(let y=0; y<MAP_SIZE; y++) {
+            let rowMap = [], rowSeen = [], rowVis = [];
+            for(let x=0; x<MAP_SIZE; x++) {
+                rowMap.push(1); // Wall
+                rowSeen.push(false);
+                rowVis.push(false);
+            }
+            gameState.map.push(rowMap);
+            gameState.seen.push(rowSeen);
+            gameState.visible.push(rowVis);
+        }
+
+        const rooms = [];
+        const MAX_ROOMS = 15;
+        const MIN_SIZE = 4;
+        const MAX_SIZE = 8;
+
+        for(let i=0; i<MAX_ROOMS; i++) {
+            let w = Math.floor(Math.random() * (MAX_SIZE - MIN_SIZE + 1)) + MIN_SIZE;
+            let h = Math.floor(Math.random() * (MAX_SIZE - MIN_SIZE + 1)) + MIN_SIZE;
+            let x = Math.floor(Math.random() * (MAP_SIZE - w - 2)) + 1;
+            let y = Math.floor(Math.random() * (MAP_SIZE - h - 2)) + 1;
+
+            const newRoom = { x, y, w, h };
+
+            // Check overlap
+            let failed = false;
+            for(let other of rooms) {
+                if(newRoom.x <= other.x + other.w && newRoom.x + newRoom.w >= other.x &&
+                   newRoom.y <= other.y + other.h && newRoom.y + newRoom.h >= other.y) {
+                    failed = true;
+                    break;
+                }
+            }
+
+            if(!failed) {
+                createRoom(newRoom);
+                
+                if(rooms.length > 0) {
+                    const prev = rooms[rooms.length-1];
+                    // Connect to previous room
+                    const prevCenter = { x: Math.floor(prev.x + prev.w/2), y: Math.floor(prev.y + prev.h/2) };
+                    const newCenter = { x: Math.floor(newRoom.x + newRoom.w/2), y: Math.floor(newRoom.y + newRoom.h/2) };
+                    
+                    if(Math.random() < 0.5) {
+                        createHStrip(prevCenter.x, newCenter.x, prevCenter.y);
+                        createVStrip(prevCenter.y, newCenter.y, newCenter.x);
+                    } else {
+                        createVStrip(prevCenter.y, newCenter.y, prevCenter.x);
+                        createHStrip(prevCenter.x, newCenter.x, newCenter.y);
+                    }
+                }
+                rooms.push(newRoom);
+            }
+        }
+
+        // Place Player in First Room
+        const startRoom = rooms[0];
+        gameState.player.x = Math.floor(startRoom.x + startRoom.w/2);
+        gameState.player.y = Math.floor(startRoom.y + startRoom.h/2);
+
+        // Place Goal in Last Room
+        const endRoom = rooms[rooms.length-1];
+        let goalX = Math.floor(endRoom.x + endRoom.w/2);
+        let goalY = Math.floor(endRoom.y + endRoom.h/2);
+        
+        gameState.entities.push({ type: 'goal', x: goalX, y: goalY, icon: EMOJIS.GOAL });
+
+        // Place Treats
+        let treatCount = 10 + (gameState.level * 2);
+        placeEntities('treat', treatCount, TREATS);
+
+        // Place Monsters
+        let monsterCount = 3 + Math.floor(gameState.level / 2); // Increasing difficulty
+        placeEntities('monster', monsterCount, MONSTERS);
+    }
+
+    function placeEntities(type, count, sourceArray) {
+        let safety = 0;
+        while(count > 0 && safety < 1000) {
+            safety++;
+            let rx = Math.floor(Math.random() * MAP_SIZE);
+            let ry = Math.floor(Math.random() * MAP_SIZE);
+            
+            // If floor and empty (not player, not other entity)
+            if(gameState.map[ry][rx] === 0 && !getEntityAt(rx, ry) && !(rx === gameState.player.x && ry === gameState.player.y)) {
+                let t = sourceArray[Math.floor(Math.random() * sourceArray.length)];
+                gameState.entities.push({ type: type, x: rx, y: ry, icon: t.icon, val: t.val });
+                count--;
+            }
+        }
+    }
+
+    function createRoom(room) {
+        for(let y = room.y; y < room.y + room.h; y++) {
+            for(let x = room.x; x < room.x + room.w; x++) {
+                gameState.map[y][x] = 0; // Floor
+            }
+        }
+    }
+
+    function createHStrip(x1, x2, y) {
+        for(let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) {
+            gameState.map[y][x] = 0;
+        }
+    }
+
+    function createVStrip(y1, y2, x) {
+        for(let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) {
+            gameState.map[y][x] = 0;
+        }
+    }
+
+    /* --- GAME LOGIC --- */
+    function handleInput(dx, dy) {
+        if(gameState.inputLocked) return;
+
+        const newX = gameState.player.x + dx;
+        const newY = gameState.player.y + dy;
+
+        // Wall Check
+        if(gameState.map[newY][newX] === 1) return;
+
+        // Check Interactions BEFORE moving
+        const entIndex = gameState.entities.findIndex(e => e.x === newX && e.y === newY);
+        if(entIndex !== -1) {
+            let ent = gameState.entities[entIndex];
+            
+            if(ent.type === 'monster') {
+                // Player walked into monster
+                hitMonster(ent, entIndex);
+                // Don't move player into the square (bounce back)
+                return;
+            } else if(ent.type === 'treat') {
+                gameState.score += ent.val;
+                showFloatText(`+${ent.val}`, '#ec4899');
+                gameState.entities.splice(entIndex, 1);
+            } else if (ent.type === 'goal') {
+                gameState.player.x = newX;
+                gameState.player.y = newY;
+                levelComplete();
+                return; 
+            }
+        }
+
+        // Move Player if not blocked/returned
+        gameState.player.x = newX;
+        gameState.player.y = newY;
+
+        // Monsters Move
+        updateMonsters();
+
+        updateUI();
+        updateFOV();
+        centerCamera();
+        render();
+    }
+
+    function updateMonsters() {
+        // Simple random movement
+        gameState.entities.forEach((ent, index) => {
+            if(ent.type !== 'monster') return;
+
+            // 50% chance to move
+            if(Math.random() < 0.5) return;
+
+            const moves = [
+                {x:0, y:-1}, {x:0, y:1}, {x:-1, y:0}, {x:1, y:0}
+            ];
+            const move = moves[Math.floor(Math.random() * moves.length)];
+            const mx = ent.x + move.x;
+            const my = ent.y + move.y;
+
+            // Check bounds and walls
+            if(mx > 0 && mx < MAP_SIZE && my > 0 && my < MAP_SIZE && gameState.map[my][mx] === 0) {
+                // Check if hitting player
+                if(mx === gameState.player.x && my === gameState.player.y) {
+                    hitMonster(ent, index);
+                } 
+                // Check if hitting other entity
+                else if (!getEntityAt(mx, my)) {
+                    ent.x = mx;
+                    ent.y = my;
+                }
+            }
+        });
+    }
+
+    function hitMonster(ent, index) {
+        gameState.score += ent.val; // val is negative
+        showFloatText(`${ent.val}`, '#6b7280'); // Grey text for sadness
+        
+        // Visual shake
+        const container = document.getElementById('game-container');
+        container.classList.remove('shake');
+        void container.offsetWidth; 
+        container.classList.add('shake');
+
+        // Remove monster (it vanishes when touched)
+        gameState.entities.splice(index, 1);
+        updateUI();
+    }
+
+    function levelComplete() {
+        gameState.inputLocked = true;
+        gameState.score += 200;
+        gameState.level++;
+        updateUI();
+        
+        document.getElementById('level-overlay').classList.remove('hidden');
+        
+        setTimeout(() => {
+            startLevel();
+        }, 1500);
+    }
+
+    /* --- FOV & RENDERING --- */
+    function updateFOV() {
+        // Reset visibility for current frame
+        for(let y=0; y<MAP_SIZE; y++) {
+            for(let x=0; x<MAP_SIZE; x++) {
+                gameState.visible[y][x] = false;
+            }
+        }
+
+        const R = 6; // Radius
+        for(let y = -R; y <= R; y++) {
+            for(let x = -R; x <= R; x++) {
+                if(x*x + y*y <= R*R) {
+                    const tx = gameState.player.x + x;
+                    const ty = gameState.player.y + y;
+                    if(tx >= 0 && tx < MAP_SIZE && ty >= 0 && ty < MAP_SIZE) {
+                        gameState.visible[ty][tx] = true;
+                        gameState.seen[ty][tx] = true;
+                    }
+                }
+            }
+        }
+    }
+
+    function centerCamera() {
+        gameState.camera.x = gameState.player.x - Math.floor(VIEW_WIDTH/2);
+        gameState.camera.y = gameState.player.y - Math.floor(VIEW_HEIGHT/2);
+    }
+
+    function render() {
+        const grid = document.getElementById('game-grid');
+        grid.innerHTML = '';
+        document.documentElement.style.setProperty('--cols', VIEW_WIDTH);
+
+        for(let y=0; y<VIEW_HEIGHT; y++) {
+            for(let x=0; x<VIEW_WIDTH; x++) {
+                const mx = gameState.camera.x + x;
+                const my = gameState.camera.y + y;
+                
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+
+                // Bounds check
+                if(mx >= 0 && mx < MAP_SIZE && my >= 0 && my < MAP_SIZE) {
+                    const isWall = gameState.map[my][mx] === 1;
+                    const isVisible = gameState.visible[my][mx];
+                    const hasSeen = gameState.seen[my][mx];
+
+                    if(isVisible) {
+                        // Fully Visible
+                        if(isWall) {
+                            cell.classList.add('tile-wall');
+                        } else {
+                            cell.classList.add('tile-floor');
+                            // Render Entities
+                            const ent = getEntityAt(mx, my);
+                            if(ent) {
+                                const div = document.createElement('div');
+                                div.innerText = ent.icon;
+                                if(ent.type === 'goal') div.className = 'goal-anim text-3xl';
+                                else if (ent.type === 'monster') div.className = 'monster-anim text-2xl';
+                                else div.className = 'text-2xl';
+                                cell.appendChild(div);
+                            }
+                            // Player
+                            if(mx === gameState.player.x && my === gameState.player.y) {
+                                const p = document.createElement('div');
+                                p.innerText = EMOJIS.PLAYER;
+                                p.className = 'player-anim text-3xl absolute';
+                                cell.appendChild(p);
+                            }
+                        }
+                    } else if (hasSeen) {
+                        // Fog of War (Dimmed)
+                        cell.classList.add('tile-dim');
+                        if(isWall) {
+                             // Dimmed Wall visual
+                             cell.style.backgroundColor = '#fbcfe8';
+                             cell.style.border = 'none';
+                        }
+                    } else {
+                        // Unseen (Shroud)
+                        cell.classList.add('tile-fog');
+                    }
+                } else {
+                    // Out of bounds
+                    cell.classList.add('tile-fog');
+                }
+                grid.appendChild(cell);
+            }
+        }
+    }
+
+    function getEntityAt(x, y) {
+        return gameState.entities.find(e => e.x === x && e.y === y);
+    }
+
+    function updateUI() {
+        document.getElementById('score-display').innerText = gameState.score;
+        document.getElementById('level-display').innerText = gameState.level;
+    }
+
+    function showFloatText(text, color) {
+        const container = document.getElementById('floating-text-container');
+        const el = document.createElement('div');
+        el.innerText = text;
+        el.style.color = color;
+        el.className = 'float-text text-xl';
+        el.style.left = '50%';
+        el.style.top = '50%';
+        el.style.marginLeft = '-20px';
+        container.appendChild(el);
+        setTimeout(() => el.remove(), 1000);
+    }
+
+    /* --- INPUT --- */
+    window.addEventListener('keydown', (e) => {
+        if(['ArrowUp','w'].includes(e.key)) { e.preventDefault(); handleInput(0, -1); }
+        if(['ArrowDown','s'].includes(e.key)) { e.preventDefault(); handleInput(0, 1); }
+        if(['ArrowLeft','a'].includes(e.key)) { e.preventDefault(); handleInput(-1, 0); }
+        if(['ArrowRight','d'].includes(e.key)) { e.preventDefault(); handleInput(1, 0); }
+    });
+
+</script>
+</body>
+</html>
